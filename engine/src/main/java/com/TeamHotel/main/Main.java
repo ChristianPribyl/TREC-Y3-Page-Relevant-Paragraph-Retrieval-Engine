@@ -7,6 +7,7 @@ import com.TeamHotel.merge_queries.Merge_Queries;
 import com.sun.source.tree.WhileLoopTree;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.io.FileWriter;
 import java.io.IOException;
 
@@ -25,14 +26,14 @@ public class Main {
 
                     final String cborQueryFile = args[2];
                     // Map<QueryId, Set<Unique words>>
-                    final Map<String, Map<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile);
+                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile);
                     vocabulary = Preprocess.getVocabulary(queries);
                 } else if (args.length == 2) {
                     // args[1] cbor-paragraphs file
 
                     final String cborParagraphsFile = args[1];
-                    // Map<paragraphsId, Set<uniqueWords>>
-                    final Map<String, Map<String, Integer>> paragraphs = Preprocess.preprocessCborParagraphs(cborParagraphsFile);
+                    // Map<paragraphsId, Map<term, tf>>
+                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> paragraphs = Preprocess.preprocessLargeCborParagrphs(cborParagraphsFile);
                     vocabulary = Preprocess.getVocabulary(paragraphs);
                 } else {
                     vocabUsage();
@@ -88,7 +89,7 @@ public class Main {
                     // execute queries in sequence.
                     final InvertedIndex invertedIndex = InvertedIndex.loadInvertedIndex(invertedIndexFile);
                     assert invertedIndex != null;
-                    final Map<String, Map<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile);
+                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile);
                     StringBuilder out = new StringBuilder();
                     queries.forEach((id, terms) -> {
                         System.out.println((String.format("Processing query %s\n", id)));

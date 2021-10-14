@@ -1,6 +1,10 @@
 package com.TeamHotel.preprocessor;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.tuple.Triple;
@@ -23,7 +27,7 @@ public class Preprocess {
     public static Map<Integer, Triple<String, String, Map<String, Integer>>> preprocessCborKeepEverything(final String cborParagraphsFile) {
         System.err.println("Preprocessing with fulltext and custom ids");
         Map<String, String> rawText = loadTest200Text(cborParagraphsFile);
-        Map<String, Map<String, Integer>> processedText = preprocess(rawText);
+        ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> processedText = preprocess(rawText);
         Map<Integer, Triple<String, String, Map<String, Integer>>> result = new HashMap<>();
         int i = 0;
         for (String id: rawText.keySet()) {
@@ -34,14 +38,14 @@ public class Preprocess {
         return result;
     }
 
-    public static Map<String, Map<String, Integer>> preprocessCborParagraphs(final String cborParagraphsFile) {
+    public static ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> preprocessCborParagraphs(final String cborParagraphsFile) {
         return preprocess(loadTest200Text(cborParagraphsFile));
     }
 
     public static String preprocessWord(final String word) {
         Map<String, String> query = new HashMap<>();
         query.put("query", word);
-        Optional<Map<String, Integer>> value = preprocess(query).values().stream().findAny();
+        Optional<ConcurrentHashMap<String, Integer>> value = preprocess(query).values().stream().findAny();
         if (value.isPresent()) {
             Optional<String> term = value.get().keySet().stream().findAny();
             if (term.isPresent()) {
@@ -51,8 +55,8 @@ public class Preprocess {
         return "";
     }
 
-    public static Map<String, Map<String, Integer>> preprocessCborQueries(final String cborOutlineFile) {
-        Map<String, String> queries = new HashMap<>();
+    public static ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> preprocessCborQueries(final String cborOutlineFile) {
+        ConcurrentHashMap<String, String> queries = new ConcurrentHashMap<>();
         try {
 
             final FileInputStream queryStream  = new FileInputStream(cborOutlineFile);
@@ -71,7 +75,7 @@ public class Preprocess {
         return preprocess(queries);
     }
 
-    public static Set<String> getVocabulary(final Map<String, Map<String, Integer>> paragraphs) {
+    public static Set<String> getVocabulary(final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> paragraphs) {
         return paragraphs.values().stream().flatMap(m -> m.keySet().stream()).collect(Collectors.toSet());
     }
 
@@ -87,7 +91,7 @@ public class Preprocess {
         });
     }
 
-    public static Map<String, Map<String, Integer>> preprocess(final Map<String, String> paragraphs) {
+    public static ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> preprocess(final Map<String, String> paragraphs) {
         if (!stopWordsLoaded) {
             stopWords = loadStopWords();
             stopWordsLoaded = true;
@@ -99,7 +103,6 @@ public class Preprocess {
 // private methods
 
     private static Set<String> loadStopWords() {
-
         Set<String> stopWords = new HashSet<>();
         try {
             InputStream file = Thread.currentThread().getContextClassLoader().getResourceAsStream(Preprocess._stopWordsFile);
@@ -150,6 +153,96 @@ public class Preprocess {
         return paragraphs;
     }
 
+    final static AtomicInteger ids = new AtomicInteger(0);
+    final static AtomicInteger numProcessed = new AtomicInteger(0);
+
+    public static ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> preprocessLargeCborParagrphs(final String cborFile) {
+        int numThreads = 6;
+        int maxDocuments = 10000;
+        System.err.println("Preprocessing a large cbor file");
+        final Set<String> stopWords = loadStopWords();
+        System.err.println("Stopwords loaded");
+        final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> documents = new ConcurrentHashMap<>(40000000);
+        Thread[] threads = new Thread[numThreads];
+        int[] progress = new int[numThreads];
+
+        Iterator<Data.Paragraph> documentIterator;
+        try {
+            final FileInputStream documentStream  = new FileInputStream(cborFile);
+            System.err.println("file opened");
+            documentIterator = DeserializeData.iterParagraphs(documentStream);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return null;
+        }
+        
+        for (int i = 0; i < numThreads; i++) {
+            threads[i] = (new Thread(new Runnable(){
+                public void run() {
+                    int tid = ids.incrementAndGet() - 1;
+                    SnowballStemmer stemmer = new porterStemmer();
+                    while (true) {
+                        Data.Paragraph paragraph;
+                        synchronized(documentIterator) {
+                            if (documentIterator.hasNext())
+                                paragraph = documentIterator.next();
+                            else
+                                break;
+                        }
+                        final String content = paragraph.getTextOnly();
+                        final Map<String, Integer> termFrequencies = new TreeMap<>();
+
+                        // paragraph text -> token stream
+                        List.of(content.toLowerCase().replaceAll("\\p{Punct}|\\d|\\p{Cntrl}|[^\\w]", " ").split("\\s+")).stream()
+                        // remove stopwords
+                        .filter(w -> !stopWords.contains(w))
+                        // stem tokens
+                        .map(w -> {
+                            stemmer.setCurrent(w);
+                            stemmer.stem();
+                            return stemmer.getCurrent();
+                        })
+                        // drop small terms
+                        .filter(t -> (t.length() > _minTokenSize))
+                        // associate terms with term-frequency in map
+                        .forEach(term -> {
+                            Integer occurrances = termFrequencies.putIfAbsent(term, 1);
+                            if (occurrances != null) {
+                                termFrequencies.put(term, occurrances + 1);
+                            }
+                        });
+                        final String docId = paragraph.getParaId();
+                        documents.put(docId, new ConcurrentHashMap<>(termFrequencies));
+                        progress[tid]++;
+                        if (progress[tid] % 10000 == 0) {
+                            System.err.printf("Thread %d processed %d paragraphs\n", tid, progress[tid]);
+                        }
+                        if (numProcessed.incrementAndGet() >= maxDocuments) {
+                            break;
+                        }
+                    }
+                    System.err.printf("Thread %d done!  It processed %d documents\n", tid, progress[tid]);
+                }
+            }));
+            threads[i].start();
+        }
+              
+        System.err.println("Waiting for threads to finish");
+
+        for (Thread t: threads) {
+            try {
+                t.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        System.err.println("Preprocessed cbor file");
+        return documents;
+
+    }
+
     private static Map<String, List<String>> tokenizeParagraphs(final Map<String, String> paragraphs) {
         Map<String, List<String>> tokenizedParagraphs = new HashMap<>();
         paragraphs.forEach((id, content) ->
@@ -190,16 +283,16 @@ public class Preprocess {
         return stemmedParagraphs;
     }
 
-    private static Map<String, Map<String, Integer>> dropTermsSmallerThan(final Map<String, Map<String, Integer>> tokenizedParagraphs) {
-        Map<String, Map<String, Integer>> filteredMap = new HashMap<>();
+    private static ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> dropTermsSmallerThan(final Map<String, Map<String, Integer>> tokenizedParagraphs) {
+        Map<String, ConcurrentHashMap<String, Integer>> filteredMap = new HashMap<>();
         tokenizedParagraphs.forEach((id, tokenMap) -> {
             Map<String, Integer> filteredTokens = new HashMap<>();
             tokenMap.forEach((t, num) -> {
                 if (t.length() >= Preprocess._minTokenSize) filteredTokens.put(t, num);
             });
-            filteredMap.put(id, filteredTokens);
+            filteredMap.put(id, new ConcurrentHashMap<>(filteredTokens));
         });
-        return filteredMap;
+        return new ConcurrentHashMap<>(filteredMap);
     }
 
 }

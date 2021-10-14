@@ -53,7 +53,7 @@ public class PostingsList implements Serializable {
 
     public String toString() {
         StringBuilder res = new StringBuilder(String.format("Postings for %s (doc frequency: %d)\n", term(), size()));
-        postings.forEach((id, doc) -> res.append(String.format("tf: %d, id: %s\n", id.termFrequency, doc.getFullId())));
+        postings.forEach((id, doc) -> res.append(String.format("tf: %d, id: %s\n", id.termFrequency, id.trecId)));
         return res.toString();
     }
 }

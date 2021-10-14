@@ -3,21 +3,25 @@ package com.TeamHotel.inverindex;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import com.TeamHotel.preprocessor.Preprocess;
 
 import org.jetbrains.annotations.NotNull;
 
 public class InvertedIndex implements Serializable {
-    private final HashMap<String, PostingsList> index;
-    private final HashSet<IndexDocument> documents;
+    private final ConcurrentHashMap<String, PostingsList> index;
+    private final ConcurrentHashMap<String, IndexDocument> documents;
 
-    public InvertedIndex(HashMap<String, PostingsList> idx) {
+    public InvertedIndex(ConcurrentHashMap<String, PostingsList> idx,ConcurrentHashMap<String, IndexDocument> docs) {
         System.err.println("Initializing in-memory index");
         this.index = idx;
-        this.documents = new HashSet<>(idx.size() / 5);
-        idx.forEach((term, postings) -> documents.addAll(postings.documents()));
+        this.documents = docs;
     }
 
-   public HashMap<String, PostingsList> getIndex() {
+   public ConcurrentHashMap<String, PostingsList> getIndex() {
         return index;
     }
 
@@ -37,51 +41,76 @@ public class InvertedIndex implements Serializable {
     }
 
     public static InvertedIndex createInvertedIndex(final String vocabFile, final String cborParagraphs) {
+        int numThreads = 6;
         //make a hashtable chain with linked list 
         // key: vocab, values will be list of docID which the document that has vocab word.
-        HashMap<String, PostingsList> invertedIndex = new HashMap<>();
-        ArrayList<Index> index = Index.createIndex(cborParagraphs);
-
+        ConcurrentHashMap<String, PostingsList> invertedIndex = new ConcurrentHashMap<>(200000);
+        ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> documents = Preprocess.preprocessLargeCborParagrphs(cborParagraphs);
+        System.out.println("Allocating space for index documents");
+        ConcurrentHashMap<String, IndexDocument> indexDocuments = new ConcurrentHashMap<>(40000000);
+        System.out.println("Initializing index documents");
+        documents.forEach((id, terms) -> indexDocuments.put(id, new IndexDocument(id)));
+        //ArrayList<Index> index = Index.createIndex(cborParagraphs);
+        System.out.println("Generating inverted index");
+        List<List<String>> wordLists = new ArrayList<List<String>>(numThreads);
+        for (int i = 0; i < numThreads; i++) {
+            wordLists.add(new LinkedList<String>());
+        }
         try {
+            final AtomicInteger i = new AtomicInteger(0);
             //Use scanner to read vocab file.
             Scanner vocabScanner = new Scanner(new FileInputStream(vocabFile));
-
-            int indexedWords = 0;
-            while (vocabScanner.hasNext())
-            {
-                String word = vocabScanner.nextLine();
-                PostingsList postings = new PostingsList(word);
-                index.forEach(idx -> {
-                    final Map<String, Integer> terms = idx.getTerms();
-                    if (terms.getOrDefault(word, null) != null) {
-                        final int tf = idx.getTerms().get(word);
-                        postings.add(new IndexIdentifier(tf, idx.carId), idx.getDocument());
-                    }
-                });
-                invertedIndex.put(word, postings);
-                indexedWords++;
-                if (indexedWords % 1000 == 0) {
-                    System.err.printf("indexed %d terms, most recently %s\n", indexedWords, word);
-                }
-            }
-            vocabScanner.close();
-
-        } catch (Exception ex) {
-            ex.printStackTrace(System.err);
+            vocabScanner.forEachRemaining(w -> wordLists.get(i.incrementAndGet() % numThreads).add(w));
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            return null;
         }
 
-        return new InvertedIndex(invertedIndex);
+        Thread[] threads = new Thread[numThreads];
+        AtomicInteger tids = new AtomicInteger(0);
+        AtomicInteger indexedWords = new AtomicInteger(0);
+        for (int i = 0; i < numThreads; i++) {
+            threads[i] = new Thread(new Runnable(){
+                public void run() {
+                    int tid = tids.incrementAndGet() - 1;
+                    wordLists.get(tid).forEach(word -> {
+                        PostingsList postings = new PostingsList(word);
+                        documents.forEach((id, terms) -> {
+                            int tf = terms.getOrDefault(word, 0);
+                            if (tf != 0) {
+                                postings.add(new IndexIdentifier(tf, id), indexDocuments.get(id));
+                            }});
+                        invertedIndex.put(word, postings);
+                        int n = indexedWords.incrementAndGet();
+                        if (n % 100 == 0) {
+                            System.out.printf("Indexed %d terms\n", n);
+                        }
+                    });
+                }});
+            threads[i].start();
+        }
+
+        for (int i = 0; i < numThreads; i++) {
+            try {
+                threads[i].join();
+            } catch (InterruptedException ex) {
+                ex.printStackTrace();
+                return null;
+            }
+        }
+
+        return new InvertedIndex(invertedIndex, indexDocuments);
     }
 
     public static InvertedIndex loadInvertedIndex(@NotNull final String invIndexFile) {
         System.err.println("Loading inverted index");
         try {
             ObjectInputStream fStream = new ObjectInputStream(new FileInputStream(invIndexFile));
-            HashMap<String, PostingsList> invIndex
-                    = (HashMap<String, PostingsList>)fStream.readObject();
+            InvertedIndex invIndex
+                    = (InvertedIndex)fStream.readObject();
             fStream.close();
             System.err.println("Inverted index loaded");
-            return new InvertedIndex(invIndex);
+            return invIndex;
         } catch (Exception ex) {
             ex.printStackTrace(System.err);
             return null;
@@ -90,10 +119,9 @@ public class InvertedIndex implements Serializable {
 
     public static void saveIndex(@NotNull final InvertedIndex index, @NotNull final String indexFile) {
         System.err.println("Saving inverted index");
-        final HashMap<String, PostingsList> idx = index.getIndex();
         try {
             ObjectOutputStream fStream = new ObjectOutputStream(new FileOutputStream(indexFile));
-            fStream.writeObject(idx);
+            fStream.writeObject(index);
             fStream.close();
             System.err.println("Saved inverted index");
         } catch (IOException ex) {
@@ -102,11 +130,11 @@ public class InvertedIndex implements Serializable {
     }
 
     public static void printIndex(@NotNull final InvertedIndex index) {
-        final HashMap<String, PostingsList> idx = index.getIndex();
+        final ConcurrentHashMap<String, PostingsList> idx = index.getIndex();
         idx.forEach((term, postings) -> System.out.println(postings.toString()));
     }
 
     public void resetScoring() {
-        documents.forEach(IndexDocument::reset);
+        documents.forEach((id, doc) -> doc.reset());
     }
 }

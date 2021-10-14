@@ -2,47 +2,33 @@ package com.TeamHotel.inverindex;
 
 import com.TeamHotel.preprocessor.Preprocess;
 
-import java.io.File;
 import java.util.*;
-import java.io.FileNotFoundException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.io.FileInputStream;
-import org.apache.commons.lang3.tuple.Triple;
 
 
 public class Index implements Serializable{
     public final String carId;
-    public final Integer ourId;
-    public final Map<String, Integer> termsSet;
-    public final String fullText;
+    public final ConcurrentHashMap<String, Integer> termsSet;
     public final IndexDocument indexDocument;
 
-    public Index(String carId, Integer ourId, Map<String, Integer> termsSet, String fulltext)
+    public Index(String carId, ConcurrentHashMap<String, Integer> termsSet)
     {
         this.carId = carId;
-        this.ourId = ourId;
         this.termsSet = termsSet;
-        this.fullText = fulltext;
         this.indexDocument = new IndexDocument(carId);
-        indexDocument.setFulltext(fulltext);
         indexDocument.setQuality(1.0);
     }
 
-    public Map<String, Integer> getTerms(){
+    public ConcurrentHashMap<String, Integer> getTerms(){
         return termsSet;
-    }
-    public Integer getId(){
-        return ourId;
     }
 
     public String getCarId() {
         return carId;
-    }
-
-    public String getFulltext() {
-        return fullText;
     }
     
     public IndexDocument getDocument() {
@@ -51,10 +37,10 @@ public class Index implements Serializable{
 
     public static ArrayList<Index> createIndex(final String cborParagraphs)
     {
-        Map<Integer, Triple<String, String, Map<String, Integer>>> document = Preprocess.preprocessCborKeepEverything(cborParagraphs);
+        Map<String, ConcurrentHashMap<String, Integer>>  document = Preprocess.preprocessLargeCborParagrphs(cborParagraphs);
         ArrayList<Index> list = new ArrayList<Index>();
         document.forEach((id, t) -> {
-            Index idx = new Index(t.getLeft(), id, t.getRight(), t.getMiddle());
+            Index idx = new Index(id, t);
             list.add(idx);
         });
 
@@ -78,14 +64,6 @@ public class Index implements Serializable{
                 }
             }
 
-            assert list != null;
-            list.forEach((idx) -> {
-                final Integer id = idx.getId();
-                final Map<String, Integer> paragraph = idx.getTerms();
-                System.out.printf("id: %s\nterms: ", id);
-                paragraph.forEach((word, num) -> System.out.printf("%s ", word));
-                System.out.println();
-            });
 
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
