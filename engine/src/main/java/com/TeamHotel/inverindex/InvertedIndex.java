@@ -4,7 +4,6 @@ package com.TeamHotel.inverindex;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.TeamHotel.preprocessor.Preprocess;
@@ -45,7 +44,16 @@ public class InvertedIndex implements Serializable {
         //make a hashtable chain with linked list 
         // key: vocab, values will be list of docID which the document that has vocab word.
         ConcurrentHashMap<String, PostingsList> invertedIndex = new ConcurrentHashMap<>(200000);
-        ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> documents = Preprocess.preprocessLargeCborParagrphs(cborParagraphs);
+        Set<String> vocab = new HashSet<>(500);
+        try {
+            Scanner vocabScanner = new Scanner(new FileInputStream(vocabFile));
+            vocabScanner.forEachRemaining(w -> vocab.add(w));
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            return null;
+        }
+        
+        ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> documents = Preprocess.preprocessLargeCborParagrphsWithVocab(cborParagraphs, vocab);
         System.out.println("Allocating space for index documents");
         ConcurrentHashMap<String, IndexDocument> indexDocuments = new ConcurrentHashMap<>(40000000);
         System.out.println("Initializing index documents");
@@ -56,16 +64,10 @@ public class InvertedIndex implements Serializable {
         for (int i = 0; i < numThreads; i++) {
             wordLists.add(new LinkedList<String>());
         }
-        try {
-            final AtomicInteger i = new AtomicInteger(0);
-            //Use scanner to read vocab file.
-            Scanner vocabScanner = new Scanner(new FileInputStream(vocabFile));
-            vocabScanner.forEachRemaining(w -> wordLists.get(i.incrementAndGet() % numThreads).add(w));
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return null;
-        }
 
+        final AtomicInteger atomicI = new AtomicInteger(0);
+        vocab.forEach(w -> wordLists.get(atomicI.incrementAndGet() % numThreads).add(w));
+ 
         Thread[] threads = new Thread[numThreads];
         AtomicInteger tids = new AtomicInteger(0);
         AtomicInteger indexedWords = new AtomicInteger(0);

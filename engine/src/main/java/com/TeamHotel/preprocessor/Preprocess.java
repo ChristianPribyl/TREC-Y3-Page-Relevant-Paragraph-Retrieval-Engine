@@ -158,7 +158,7 @@ public class Preprocess {
 
     public static ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> preprocessLargeCborParagrphs(final String cborFile) {
         int numThreads = 6;
-        int maxDocuments = 10000;
+        int maxDocuments = 1000000;
         System.err.println("Preprocessing a large cbor file");
         final Set<String> stopWords = loadStopWords();
         System.err.println("Stopwords loaded");
@@ -193,7 +193,7 @@ public class Preprocess {
                         final Map<String, Integer> termFrequencies = new TreeMap<>();
 
                         // paragraph text -> token stream
-                        List.of(content.toLowerCase().replaceAll("\\p{Punct}|\\d|\\p{Cntrl}|[^\\w]", " ").split("\\s+")).stream()
+                        List.of(content.toLowerCase().replaceAll("\\p{Punct}|\\d|\\p{Cntrl}", " ").split("\\s+")).stream()
                         // remove stopwords
                         .filter(w -> !stopWords.contains(w))
                         // stem tokens
@@ -214,10 +214,102 @@ public class Preprocess {
                         final String docId = paragraph.getParaId();
                         documents.put(docId, new ConcurrentHashMap<>(termFrequencies));
                         progress[tid]++;
-                        if (progress[tid] % 10000 == 0) {
-                            System.err.printf("Thread %d processed %d paragraphs\n", tid, progress[tid]);
+                        int totalDone = numProcessed.incrementAndGet();
+                        if (totalDone % 10000 == 0) {
+                            System.out.printf("Processed %d documents\n", totalDone);
                         }
-                        if (numProcessed.incrementAndGet() >= maxDocuments) {
+                        if (totalDone >= maxDocuments) {
+                            break;
+                        }
+                    }
+                    System.err.printf("Thread %d done!  It processed %d documents\n", tid, progress[tid]);
+                }
+            }));
+            threads[i].start();
+        }
+              
+        System.err.println("Waiting for threads to finish");
+
+        for (Thread t: threads) {
+            try {
+                t.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        System.err.println("Preprocessed cbor file");
+        return documents;
+
+    }
+
+    
+    public static ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> preprocessLargeCborParagrphsWithVocab(final String cborFile, Set<String> vocab) {
+        int numThreads = 6;
+        int maxDocuments = 1000000;
+        System.err.println("Preprocessing a large cbor file");
+        final Set<String> stopWords = loadStopWords();
+        System.err.println("Stopwords loaded");
+        final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> documents = new ConcurrentHashMap<>(40000000);
+        Thread[] threads = new Thread[numThreads];
+        int[] progress = new int[numThreads];
+
+        Iterator<Data.Paragraph> documentIterator;
+        try {
+            final FileInputStream documentStream  = new FileInputStream(cborFile);
+            System.err.println("file opened");
+            documentIterator = DeserializeData.iterParagraphs(documentStream);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return null;
+        }
+        
+        for (int i = 0; i < numThreads; i++) {
+            threads[i] = (new Thread(new Runnable(){
+                public void run() {
+                    int tid = ids.incrementAndGet() - 1;
+                    SnowballStemmer stemmer = new porterStemmer();
+                    while (true) {
+                        Data.Paragraph paragraph;
+                        synchronized(documentIterator) {
+                            if (documentIterator.hasNext())
+                                paragraph = documentIterator.next();
+                            else
+                                break;
+                        }
+                        final String content = paragraph.getTextOnly();
+                        final Map<String, Integer> termFrequencies = new TreeMap<>();
+
+                        // paragraph text -> token stream
+                        List.of(content.toLowerCase().replaceAll("\\p{Punct}|\\d|\\p{Cntrl}", " ").split("\\s+")).stream()
+                        // remove stopwords
+                        .filter(w -> !stopWords.contains(w))
+                        // stem tokens
+                        .map(w -> {
+                            stemmer.setCurrent(w);
+                            stemmer.stem();
+                            return stemmer.getCurrent();
+                        })
+                        // drop small terms
+                        .filter(t -> (t.length() > _minTokenSize))
+                        // drop terms not used for queries
+                        .filter(w -> vocab.contains(w))
+                        // associate terms with term-frequency in map
+                        .forEach(term -> {
+                            Integer occurrances = termFrequencies.putIfAbsent(term, 1);
+                            if (occurrances != null) {
+                                termFrequencies.put(term, occurrances + 1);
+                            }
+                        });
+                        final String docId = paragraph.getParaId();
+                        documents.put(docId, new ConcurrentHashMap<>(termFrequencies));
+                        progress[tid]++;
+                        int totalDone = numProcessed.incrementAndGet();
+                        if (totalDone % 10000 == 0) {
+                            System.out.printf("Processed %d documents\n", totalDone);
+                        }
+                        if (totalDone >= maxDocuments) {
                             break;
                         }
                     }

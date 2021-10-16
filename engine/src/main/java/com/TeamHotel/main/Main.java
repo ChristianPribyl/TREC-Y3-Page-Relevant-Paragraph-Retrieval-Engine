@@ -99,7 +99,7 @@ public class Main {
                         // $queryId Q0 $paragraphId $rank $score $teamName-$methodName
                     });
                     try {
-                        FileWriter outFile = new FileWriter(String.format("%s" + "-test200.run", mergeType+tfidfVariant));
+                        FileWriter outFile = new FileWriter(String.format("%s" + "-Y3.run", mergeType+tfidfVariant));
                         outFile.write(out.toString());
                         outFile.close();
                     } catch (IOException ex) {
