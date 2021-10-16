@@ -62,10 +62,13 @@ public class Preprocess {
             final FileInputStream queryStream  = new FileInputStream(cborOutlineFile);
 
             for (final Data.Page query : DeserializeData.iterableAnnotations(queryStream)) {
-                final String content = query.getPageName();
-                final String queryId = query.getPageId();
-
-                queries.put(queryId, content);
+                for (List<Data.Section> sections : query.flatSectionPaths()) {
+                    final String queryId = Data.sectionPathId(query.getPageId(), sections);
+                    final StringBuilder queryBuilder = new StringBuilder(query.getPageName());
+                    sections.forEach(section -> queryBuilder.append(" ").append(section.getHeading()));
+                    final String content = queryBuilder.toString();
+                    queries.put(queryId, content);
+                }
             }
         }
         catch(Exception ex) {   
@@ -212,11 +215,16 @@ public class Preprocess {
                             }
                         });
                         final String docId = paragraph.getParaId();
-                        documents.put(docId, new ConcurrentHashMap<>(termFrequencies));
+                        if (!termFrequencies.isEmpty()) {
+                            documents.put(docId, new ConcurrentHashMap<>(termFrequencies));
+                        }
                         progress[tid]++;
                         int totalDone = numProcessed.incrementAndGet();
-                        if (totalDone % 10000 == 0) {
+                        if (totalDone % 20000 == 0) {
                             System.out.printf("Processed %d documents\n", totalDone);
+                        }
+                        if (totalDone % 100000 == 0) {
+                            System.gc();
                         }
                         if (totalDone >= maxDocuments) {
                             break;
@@ -303,11 +311,16 @@ public class Preprocess {
                             }
                         });
                         final String docId = paragraph.getParaId();
-                        documents.put(docId, new ConcurrentHashMap<>(termFrequencies));
+                        if (!termFrequencies.isEmpty()) {
+                            documents.put(docId, new ConcurrentHashMap<>(termFrequencies));
+                        }
                         progress[tid]++;
                         int totalDone = numProcessed.incrementAndGet();
-                        if (totalDone % 10000 == 0) {
+                        if (totalDone % 20000 == 0) {
                             System.out.printf("Processed %d documents\n", totalDone);
+                        }
+                        if (totalDone % 100000 == 0) {
+                            System.gc();
                         }
                         if (totalDone >= maxDocuments) {
                             break;

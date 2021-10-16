@@ -126,6 +126,7 @@ public class Merge_Queries {
 		for (IndexDocument d : rankings) {
 			results.add(String.format("%s %d %f TeamHotel-%s", d.getFullId(), i, d.getFinalScore(), mergeType));
 			// $paragraphId $rank $score $teamName-$methodName
+			if (i == 20) break;
 			i++;
 		}
 		return results;
