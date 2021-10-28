@@ -4,8 +4,6 @@ import com.TeamHotel.preprocessor.Preprocess;
 import com.TeamHotel.inverindex.*;
 
 import com.TeamHotel.merge_queries.Merge_Queries;
-import com.sun.source.tree.WhileLoopTree;
-
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.FileWriter;
@@ -26,14 +24,14 @@ public class Main {
 
                     final String cborQueryFile = args[2];
                     // Map<QueryId, Set<Unique words>>
-                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile);
+                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile, Preprocess.QueryType.PAGES);
                     vocabulary = Preprocess.getVocabulary(queries);
                 } else if (args.length == 2) {
                     // args[1] cbor-paragraphs file
 
                     final String cborParagraphsFile = args[1];
                     // Map<paragraphsId, Map<term, tf>>
-                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> paragraphs = Preprocess.preprocessLargeCborParagrphs(cborParagraphsFile);
+                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> paragraphs = Preprocess.preprocessLargeCborParagrphsWithVocab(cborParagraphsFile, Collections.<String>emptySet(), 0, 2500000);
                     vocabulary = Preprocess.getVocabulary(paragraphs);
                 } else {
                     vocabUsage();
@@ -46,8 +44,36 @@ public class Main {
                     // args[1]: vocab
                     // args[2]: cborParagraphs
                     // args[3]: index save location
-                    final InvertedIndex invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2]);
+                    final InvertedIndex invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 0, 25000000);
                     InvertedIndex.saveIndex(invertedIndex, args[3]);
+                                        /*
+                    new java.io.File(args[3]).mkdir();
+                    InvertedIndex invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 0, 4000000);
+                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/1.dat");
+                    
+                    // The inverted index takes a lot of space.  We want the garbage collector to free 
+                    // the previous one before we start creating another.  Java can't discard it until all
+                    // references are removed.
+                    invertedIndex = null;
+                    System.gc(); 
+
+                    invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 4000000, 4000000);
+                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/2.dat");
+                    invertedIndex = null;
+                    System.gc();
+                    invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 8000000, 4000000);
+                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/3.dat");
+                    invertedIndex = null;
+                    System.gc();
+                    invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 12000000, 4000000);
+                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/4.dat");
+                    invertedIndex = null;
+                    System.gc();
+                    invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 16000000, 4000000);
+                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/5.dat");
+                    invertedIndex = null;
+                    System.gc();
+                    */
                 } else {
                     indexUsage();
                 }
@@ -89,7 +115,7 @@ public class Main {
                     // execute queries in sequence.
                     final InvertedIndex invertedIndex = InvertedIndex.loadInvertedIndex(invertedIndexFile);
                     assert invertedIndex != null;
-                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile);
+                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile, Preprocess.QueryType.PAGES);
                     StringBuilder out = new StringBuilder();
                     queries.forEach((id, terms) -> {
                         System.out.println((String.format("Processing query %s\n", id)));

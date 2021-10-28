@@ -39,7 +39,7 @@ public class InvertedIndex implements Serializable {
         return index.getOrDefault(term, null);
     }
 
-    public static InvertedIndex createInvertedIndex(final String vocabFile, final String cborParagraphs) {
+    public static InvertedIndex createInvertedIndex(final String vocabFile, final String cborParagraphs, int offset, int maxParagraphs) {
         int numThreads = 6;
         //make a hashtable chain with linked list 
         // key: vocab, values will be list of docID which the document that has vocab word.
@@ -53,7 +53,7 @@ public class InvertedIndex implements Serializable {
             return null;
         }
         
-        ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> documents = Preprocess.preprocessLargeCborParagrphsWithVocab(cborParagraphs, vocab);
+        ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> documents = Preprocess.preprocessLargeCborParagrphsWithVocab(cborParagraphs, vocab, offset, maxParagraphs);
         System.out.println("Allocating space for index documents");
         ConcurrentHashMap<String, IndexDocument> indexDocuments = new ConcurrentHashMap<>(40000000);
         System.out.println("Initializing index documents");

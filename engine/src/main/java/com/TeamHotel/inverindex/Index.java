@@ -35,18 +35,6 @@ public class Index implements Serializable{
         return this.indexDocument;
     }
 
-    public static ArrayList<Index> createIndex(final String cborParagraphs)
-    {
-        Map<String, ConcurrentHashMap<String, Integer>>  document = Preprocess.preprocessLargeCborParagrphs(cborParagraphs);
-        ArrayList<Index> list = new ArrayList<Index>();
-        document.forEach((id, t) -> {
-            Index idx = new Index(id, t);
-            list.add(idx);
-        });
-
-        return list;
-    }
-
     public static boolean printIndex(final String indexFile)
     {
         try {
