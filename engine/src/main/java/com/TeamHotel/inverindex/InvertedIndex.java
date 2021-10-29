@@ -5,15 +5,28 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.sql.*;
 
 import com.TeamHotel.preprocessor.Preprocess;
 
+import org.apache.commons.lang3.SerializationUtils;
 import org.jetbrains.annotations.NotNull;
 
 public class InvertedIndex implements Serializable {
     private final ConcurrentHashMap<String, PostingsList> index;
     private final ConcurrentHashMap<String, IndexDocument> documents;
+    private Connection connection;
+    private static AtomicInteger nextID = new AtomicInteger();
+    private PreparedStatement insertPostingsStatement;
+    private PreparedStatement selectPostingsStatement;
+    private PreparedStatement insertIndexDocument;
+    private PreparedStatement selectIndexDocument;
 
+    public InvertedIndex() {
+        index = null;
+        documents = null;
+
+    }
     public InvertedIndex(ConcurrentHashMap<String, PostingsList> idx,ConcurrentHashMap<String, IndexDocument> docs) {
         System.err.println("Initializing in-memory index");
         this.index = idx;
@@ -40,6 +53,9 @@ public class InvertedIndex implements Serializable {
     }
 
     public static InvertedIndex createInvertedIndex(final String vocabFile, final String cborParagraphs, int offset, int maxParagraphs) {
+        InvertedIndex index = new InvertedIndex();
+        index.connectToDatabase("../index.db");
+        
         int numThreads = 6;
         //make a hashtable chain with linked list 
         // key: vocab, values will be list of docID which the document that has vocab word.
@@ -138,5 +154,85 @@ public class InvertedIndex implements Serializable {
 
     public void resetScoring() {
         documents.forEach((id, doc) -> doc.reset());
+    }
+
+    public void resetDatabase(@NotNull final String dbname) {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(String.format("jdbc:sqlite:%s.db", dbname));
+            try {
+                Statement s = connection.createStatement();
+                s.executeUpdate("DROP TABLE POSTINGS && DROP TABLE INDEX");
+                s.close();
+            } catch (Exception ex) {
+            }
+            Statement s = connection.createStatement();
+            s.executeUpdate("CREATE TABLE POSTINGS " +
+                            "(ID             INT PRIMARY KEY  NOT NULL," +
+                            " TERM           TEXT    NOT NULL, " +
+                            " DOC_FREQUENCY  INT     NOT NULL, " +
+                            " POSTINGS_LIST  BINARY  NOT NULL" + 
+                            ") && " +
+                            "CREATE TABLE INDEX " +
+                            "(ID             INT PRIMARY KEY  NOT NULL, " +
+                            " DOCID          TEXT NOT NULL, " +
+                            " FULLTEXT       TEXT NOT NULL, " +
+                            " INDEX_ENTRY    BINARY NOT NULL" +
+                            ")");
+            s.close();
+        } catch ( Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    public void initializeDatabase() {
+        try {
+        insertPostingsStatement = connection.prepareStatement(
+            "INSERT INTO POSTINGS VALUES (?, ?, ?, ?)");
+        selectPostingsStatement = connection.prepareStatement(
+            "SELECT POSTINGS_LIST FROM POSTINGS WHERE TERM = ?");
+        insertIndexDocument = connection.prepareStatement(
+            "INSERT INTO INDEX VALUES (?, ?, ?, ?)");
+        selectIndexDocument = connection.prepareStatement(
+            "SELECT INDEX_ENTRY FROM INDEX WHERE DOCID = ?");
+        } catch(Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    public void connectToDatabase(@NotNull final String dbname) {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(String.format("jdbc:sqlite:%s.db", dbname));
+        } catch ( Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    public void insertPostings(@NotNull final PostingsList newPosting) {
+        try {
+            insertPostingsStatement.setInt(1, nextID.incrementAndGet());
+            insertPostingsStatement.setString(2, newPosting.term());
+            insertPostingsStatement.setInt(3, newPosting.size());
+            insertPostingsStatement.setBytes(4, SerializationUtils.serialize(newPosting));
+            if (0 == insertPostingsStatement.executeUpdate()) {
+                throw new Exception(String.format("failed to insert postings list for term: %s\n", newPosting.term()));
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    @NotNull
+    public PostingsList getPostings(@NotNull final String term) {
+        System.out.println("Searching database for postings of term " + term);
+        try {
+            selectPostingsStatement.setString(1, term);
+            ResultSet results = selectPostingsStatement.executeQuery();
+            return (PostingsList)SerializationUtils.deserialize(results.getBytes("POSTINGS_LIST"));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return new PostingsList(term);
     }
 }

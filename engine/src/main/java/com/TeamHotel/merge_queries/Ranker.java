@@ -3,6 +3,8 @@ package com.TeamHotel.merge_queries;
 import com.TeamHotel.inverindex.IndexDocument;
 import com.TeamHotel.inverindex.IndexIdentifier;
 import com.TeamHotel.inverindex.PostingsList;
+
+import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -191,5 +193,9 @@ public class Ranker {
                 assert(false);
                 return null;
         }
+    }
+
+    public static List<Pair<String, Double>> mergeResults(List<List<Pair<String, Double>>> allFacetResults) {
+        return null;
     }
 }

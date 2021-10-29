@@ -1,16 +1,23 @@
 package com.TeamHotel.main;
 
 import com.TeamHotel.preprocessor.Preprocess;
+
+import org.apache.commons.lang3.tuple.Pair;
+
 import com.TeamHotel.inverindex.*;
 
 import com.TeamHotel.merge_queries.Merge_Queries;
+import com.TeamHotel.merge_queries.Ranker;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.io.FileWriter;
 import java.io.IOException;
 
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         System.setProperty("file.encoding", "UTF-8");
         if (args.length == 0) {
             usage();
@@ -44,7 +51,7 @@ public class Main {
                     // args[1]: vocab
                     // args[2]: cborParagraphs
                     // args[3]: index save location
-                    final InvertedIndex invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 0, 25000000);
+                    final InvertedIndex invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 0, 100000000);
                     InvertedIndex.saveIndex(invertedIndex, args[3]);
                                         /*
                     new java.io.File(args[3]).mkdir();
@@ -76,6 +83,26 @@ public class Main {
                     */
                 } else {
                     indexUsage();
+                }
+                break;
+            }
+            case "index-db": {
+                if (args.length == 4) {
+                    final String vocabFile = args[1];
+                    final String dbname = args[2];
+                    final String cborCorpus = args[3];
+                    final int maxClusteringRepititions = 100;
+                    final int offset = 0; // number of documents to skip
+
+                    List<String> vocab = Preprocess.loadVocab(vocabFile);
+
+                    Index idx = Index.createNew(dbname).get();
+                        
+                    idx.addNewDocuments(cborCorpus, vocab.stream().collect(Collectors.toSet())); // INDEX(DOCID, FULLTEXT, PREPROCESSED_TOKENS, TOKEN_SET, CLASS="", VECTOR=Array_all_0, LEADER=FALSE, FAKE=FALSE)
+                    WordSimilarity.calculateWordVectors(idx, offset);
+                    Clustering.clusterDocuments(idx, maxClusteringRepititions);
+                } else {
+                    dumpIndexDbUsage();
                 }
                 break;
             }
@@ -137,14 +164,68 @@ public class Main {
                 }
                 break;
             }
+            case "cluster-cbor-query": {
+                if (args.length == 3) {
+                    final String dbname = args[1];
+                    final String cborQueryFile = args[2];
+                    final int resultsPerQuery = 20;
+
+                    // generate list of queries
+                    // facetedQueries = Map<queryid, List<queryFacets>>
+                    // queryFacet = List<queryTerms>
+                    //
+                    // Each query facet should be treated like a normal query.
+                    // For each query id, we query each individual facet query, and merge the results.
+                    Map<String, List<List<String>>> facetedQueries = Preprocess.readFacetedQueries(cborQueryFile);
+
+                    Index idx = Index.load(dbname).get();
+
+                    FileWriter outFile = new FileWriter(String.format("WordSimilarity+Clustering-Y3.run"));
+
+                    facetedQueries.forEach((queryID, facets) -> {
+                        final List<List<Pair<String, Double>>> allFacetResults = new LinkedList<>();
+                        facets.forEach((List<String> queryFacet) -> {
+                            // List<DocID, Score>
+                            final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet, resultsPerQuery);
+                            allFacetResults.add(facetResults);
+                        });
+                        final List<Pair<String, Double>> finalResult = Ranker.mergeResults(allFacetResults);
+
+                        AtomicInteger i = new AtomicInteger();
+                        finalResult.forEach(p -> {
+                            try {
+                                outFile.write(String.format("%s Q0 %s %d %f TeamHotel-%s", queryID, p.getLeft(), i, p.getRight(), "WordSimilarity"));
+                            } catch (IOException e) {
+                                // TODO Auto-generated catch block
+                                e.printStackTrace();
+                            }
+                            idx.logResult(queryID, p.getLeft(), p.getRight(), i.getAndIncrement());
+                        });
+
+                    });
+                } else {
+                    dumpClusterCborQueryUsage();
+                }
+                break;
+            }
             default:
                 usage();
         }
     }
 
+    private static void dumpClusterCborQueryUsage() {
+        System.out.println("Usage: ir-engine cluster-cbor-query index-name cborQueryFile");
+    }
+
+    private static void dumpIndexDbUsage() {
+        System.out.println("Usage: ir-engine index-db vocabFile index-name cborParagraphs");
+    }
+
     static void usage() {
-        System.out.println("Usage: prog-4 [vocab | index | dump-index | query | cbor-query]\n" +
-                "Run commands for specific usage instructions");
+        System.out.println("USage: ir-engine [vocab | index-db | cluster-cbor-query]\n" +
+        "Run commands for specific usage instructions");
+        //System.out.println("Usage: prog-4 [vocab | index | dump-index | query | cbor-query]\n" +
+        //        "Run commands for specific usage instructions");
     }
 
     static void vocabUsage() {
