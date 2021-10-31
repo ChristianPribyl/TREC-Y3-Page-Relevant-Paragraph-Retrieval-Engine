@@ -83,7 +83,7 @@ public class Index implements Serializable{
 
     /**
      * private constructor for Index.
-     * @param dbname - the name of the database.  We add .db to the end to get the filename to look for.
+     * @param dbname - file to store the index.
      * @param resetIfExists - If true, we delete the relevant tables and rebuild an empty database.
      * @throws SQLException - If we can't connect to and initialize the database, we can't create an index.
      */
@@ -94,7 +94,7 @@ public class Index implements Serializable{
             ex.printStackTrace();
             throw new SQLException("Failed to initialize SQL library.  Class not found");
         }
-        connection = DriverManager.getConnection(String.format("jdbc:sqlite:%s.db", dbname));
+        connection = DriverManager.getConnection(String.format("jdbc:sqlite:%s", dbname));
         if (resetIfExists) {
             resetDatabase();
         }
