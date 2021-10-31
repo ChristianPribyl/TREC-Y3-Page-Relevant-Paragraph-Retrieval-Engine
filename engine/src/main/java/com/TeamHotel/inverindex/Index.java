@@ -1,5 +1,6 @@
 package com.TeamHotel.inverindex;
 
+import com.TeamHotel.main.WordSimilarity;
 import com.TeamHotel.preprocessor.Preprocess;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -7,45 +8,52 @@ import org.apache.commons.lang3.tuple.Triple;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.io.FileInputStream;
 
 
 public class Index implements Serializable{
-    public String carId;
-    public ConcurrentHashMap<String, Integer> termsSet;
-    public IndexDocument indexDocument;
-
     private final Connection connection;
-    private final PreparedStatement insertPostingsStatement;
-    private final PreparedStatement selectPostingsStatement;
-    private final PreparedStatement insertIndexDocument;
-    private final PreparedStatement selectIndexDocument;
-    private final PreparedStatement insertDocument;
-    private final PreparedStatement updateDocumentVector;
-    private final PreparedStatement updateDocumentClass;
-    private final PreparedStatement insertFakeLeader;
-    private final PreparedStatement selectDocumentVectorsByClass;
-    private final PreparedStatement selectDocumentLeaderVectors;
-    private final PreparedStatement selectDocumentFulltext;
-    private final PreparedStatement deleteExtraFakes;
-    private final PreparedStatement unsetLeaders;
+    private static final Map<QUERY, String> queryStrings;
+    static {
+        queryStrings = new HashMap<>();
+        queryStrings.put(QUERY.INSERT_POSTINGS,                 "INSERT INTO POSTINGS VALUES (?, ?, ?, ?)");
+        queryStrings.put(QUERY.INSERT_DOCUMENT,                 "INSERT INTO DOCUMENTS VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, 0)");
+        queryStrings.put(QUERY.INSERT_FAKE_LEADER,              "INSERT INTO DOCUMENTS VALUES (?, NULL, NULL, NULL, NULL, ?, ?, 1, 1)");
+        queryStrings.put(QUERY.UPDATE_DOCUMENT_VECTOR,          "UPDATE DOCUMENTS SET VECTOR=? WHERE DOCID=?");
+        queryStrings.put(QUERY.UPDATE_DOCUMENT_CLASS,           "UPDATE DOCUMENTS SET CLASS=? WHERE DOCID=?");
+        queryStrings.put(QUERY.UNSET_LEADERS,                   "UPDATE DOCUMENTS SET LEADER=0 WHERE LEADER=1");
+        queryStrings.put(QUERY.DELETE_EXTRA_FAKES,              "DELETE FROM DOCUMENTS WHERE (FAKE=1 && LEADER=0)");
+        queryStrings.put(QUERY.SELECT_VECTOR_BY_INDEX,          "SELECT (DOCID, VECTOR) FROM DOCUMENTS WHERE ID=? && FAKE=0");
+        queryStrings.put(QUERY.SELECT_POSTINGS,                 "SELECT POSTINGS_LIST FROM POSTINGS WHERE TERM = ?");
+        queryStrings.put(QUERY.SELECT_DOCUMENT_VECTOR_BY_CLASS, "SELECT (DOCID, VECTOR) FROM DOCUMENTS WHERE CLASS=? && FAKE=0");
+        queryStrings.put(QUERY.SELECT_LEADER_VECTORS,           "SELECT (DOCID, VECTOR) FROM DOCUMENTS WHERE LEADER=1");
+        queryStrings.put(QUERY.SELECT_DOCUMENT_FULLTEXT,        "SELECT (FULL_TEXT) FROM DOCUMENTS WHERE DOCID=?");
+        queryStrings.put(QUERY.SELECT_CLUSTERS,                 "SELECT DISCTINCT (CLASS) FROM DOCUMENTS WHERE CLASS !=0");
+        queryStrings.put(QUERY.COUNT_DOCUMENTS,                 "SELECT COUNT(*) FROM DOCUMENTS");
+        queryStrings.put(QUERY.SELECT_ALL_DOCID_VECTOR_CLUSTER, "SELECT (DOCID, VECTOR, CLASS) FROM DOCUMENTS WHERE FAKE=0 && ID >= ? && ID < ?");
+        queryStrings.put(QUERY.SELECT_TOKENIZED_DOCUMENTS,      "SELECT (DOCID, PREPROCESSED_TEXT) FROM DOCUMENTS WHERE FAKE=0 && ID >= ? && ID < ?");
+    }
+    enum QUERY { INSERT_POSTINGS, SELECT_POSTINGS, INSERT_DOCUMENT, UPDATE_DOCUMENT_VECTOR, UPDATE_DOCUMENT_CLASS,
+    INSERT_FAKE_LEADER, SELECT_DOCUMENT_VECTOR_BY_CLASS, SELECT_LEADER_VECTORS, SELECT_DOCUMENT_FULLTEXT, DELETE_EXTRA_FAKES,
+    UNSET_LEADERS, SELECT_VECTOR_BY_INDEX, COUNT_DOCUMENTS, SELECT_CLUSTERS, SELECT_ALL_DOCID_VECTOR_CLUSTER, SELECT_TOKENIZED_DOCUMENTS}
+
     private boolean in_transaction = false;
     private AtomicInteger nextId = new AtomicInteger();
 
 
 
+    /**
+     * Create an Index with a new database.
+     * @param dbname - the name of the database.  Not the filename
+     * @return - An Index with a connection to the created database - Or None if creating the Index fails.
+     */
     @NotNull
     public static Optional<Index> createNew(@NotNull final String dbname) {
         try {
@@ -57,6 +65,11 @@ public class Index implements Serializable{
         }
     }
 
+    /**
+     * Create an Index from an existing database.
+     * @param dbname - the name of the database.  Not the filename
+     * @return - An Index with a connection to the specified database - Or None if creating the Index fails.
+     */
     @NotNull
     public static Optional<Index> load(@NotNull final String dbname) {
         try {
@@ -68,41 +81,36 @@ public class Index implements Serializable{
         }
     }
 
-    private Index(@NotNull final String dbname, final boolean resetIfExists) throws SQLException, ClassNotFoundException {
-        Class.forName("org.sqlite.JDBC");
+    /**
+     * private constructor for Index.
+     * @param dbname - the name of the database.  We add .db to the end to get the filename to look for.
+     * @param resetIfExists - If true, we delete the relevant tables and rebuild an empty database.
+     * @throws SQLException - If we can't connect to and initialize the database, we can't create an index.
+     */
+    private Index(@NotNull final String dbname, final boolean resetIfExists) throws SQLException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+        } catch (ClassNotFoundException ex) {
+            ex.printStackTrace();
+            throw new SQLException("Failed to initialize SQL library.  Class not found");
+        }
         connection = DriverManager.getConnection(String.format("jdbc:sqlite:%s.db", dbname));
         if (resetIfExists) {
             resetDatabase();
         }
-        //ID, DOCID, FULLTEXT, PREPROCESSED_TOKENS, TOKEN_SET, CLASS="", VECTOR=Array_all_0, LEADER=FALSE, FAKE=FALSE
-        insertDocument = connection.prepareStatement(
-            "INSERT INTO DOCUMENTS VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, 0)");
-        updateDocumentVector = connection.prepareStatement(
-            "UPDATE DOCUMENTS SET VECTOR=? WHERE DOCID=?");
-        updateDocumentClass = connection.prepareStatement(
-            "UPDATE DOCUMENTS SET CLASS=? WHERE DOCID=?");
-        insertFakeLeader = connection.prepareStatement(
-            "INSERT INTO DOCUMENTS VALUES (?, NULL, NULL, NULL, NULL, ?, ?, 1, 1)");
-        selectDocumentVectorsByClass = connection.prepareStatement(
-            "SELECT (DOCID, VECTOR) FROM DOCUMENTS WHERE CLASS=?");
-        selectDocumentLeaderVectors = connection.prepareStatement(
-            "SELECT (DOCID, VECTOR) FROM DOCUMENTS WHERE LEADER=1");
-        selectDocumentFulltext = connection.prepareStatement(
-            "SELECT (FULL_TEXT) FROM DOCUMENTS WHERE DOCID=?");
-        deleteExtraFakes = connection.prepareStatement(
-            "DELETE FROM DOCUMENTS WHERE (FAKE=1 && LEADER=0)");
-        unsetLeaders = connection.prepareStatement(
-            "UPDATE DOCUMENTS SET LEADER=0 WHERE LEADER=1");
-
-        // ID, TERM, DOCUMENT_FREQUENCY, POSTINGS
-        insertPostingsStatement = connection.prepareStatement(
-            "INSERT INTO POSTINGS VALUES (?, ?, ?, ?)");
-        selectPostingsStatement = connection.prepareStatement(
-            "SELECT POSTINGS_LIST FROM POSTINGS WHERE TERM = ?");
-        insertIndexDocument = connection.prepareStatement(
-            "INSERT INTO INDEX VALUES (?, ?, ?, ?)");
-        selectIndexDocument = null;//connection.prepareStatement(
-            //"SELECT INDEX_ENTRY FROM DOCUMENTS WHERE DOCID = ?");
+        // Verify all SQL statement strings are valid and match the schema.
+        AtomicBoolean validSQL = new AtomicBoolean(true);
+        queryStrings.forEach((t, s) -> {
+            try {
+                connection.prepareStatement(s).close();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+                validSQL.set(false);
+            }
+        });
+        if (!validSQL.get()) {
+            throw new SQLException("SQL statements had errors or didn't match the database schema");
+        }
     }
 
     private void resetDatabase() throws SQLException {
@@ -179,79 +187,608 @@ public class Index implements Serializable{
         }
     }
 
+    /**
+     * add a single document to the index
+     * @param docID - the TREC id of the document
+     * @param fulltext - a string containing the entire document
+     * @param tokenizedText - the document represented by a list of preprocessed tokens
+     * @param tokenSet - a map containing all unique tokens, and their frequencies
+     */
     public void addNewDocument(@NotNull final String docID, @NotNull final String fulltext, @NotNull final List<String> tokenizedText,
     @NotNull final TreeMap<String, Integer> tokenSet) {
         try {
-            insertDocument.setInt(1, nextId.getAndIncrement());
-            insertDocument.setString(2, docID);
-            insertDocument.setString(3, fulltext);
+            PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.INSERT_DOCUMENT));
+            s.setInt(1, nextId.getAndIncrement());
+            s.setString(2, docID);
+            s.setString(3, fulltext);
             final StringBuilder tokenString = new StringBuilder(tokenizedText.get(0));
             tokenizedText.listIterator(1).forEachRemaining(t -> tokenString.append(",").append(t));
-            insertDocument.setString(4, tokenString.toString());
+            s.setString(4, tokenString.toString());
             final StringBuilder uniqueTokens = new StringBuilder();
             tokenSet.forEach((t, tf) -> uniqueTokens.append(",").append(t).append(":").append(tf));
             uniqueTokens.subSequence(1, uniqueTokens.length());
-            insertDocument.setString(5, uniqueTokens.toString());
-            if (0 == insertDocument.executeUpdate()) {
+            s.setString(5, uniqueTokens.toString());
+            if (0 == s.executeUpdate()) {
                 System.err.println("Failed to insert " + docID + " into database");
             }
+            s.close();
         } catch(SQLException ex) {
             ex.printStackTrace();
         }
     }
 
+    /**
+     * Add all the documents in a TREC cbor paragraphs file into the index
+     * @param cborParagraphs - file containing TREC cbor paragraphs
+     * @param vocab - the set of words we care about.  The words should already be preprocessed and stemmed.
+     * This is necessary because indexing will take far too long if we consider all words.
+     */
     public void addNewDocuments(@NotNull final String cborParagraphs, @NotNull final Set<String> vocab) {
         Preprocess.processParagraphs(cborParagraphs, (id, text, tokenized, tokens) -> {
             addNewDocument(id, text, tokenized, tokens);
         }, vocab, 0, 100000000);
     }
 
-    public void logResult(String queryID, String left, Double right, int i) {
+    /**
+     * Log a query result for later analysis
+     * @param queryID - the TREC id of the query
+     * @param documentID - TREC id of returned document
+     * @param score - score the document received
+     * @param ranking - the document's ranking in overall query results
+     */
+    public void logResult(@NotNull final String queryID, @NotNull final String documentID, final double score, final int ranking) {
+        final Optional<String> opt = getFulltextById(documentID);
+        if (opt.isPresent()) {
+            final String fulltext = opt.get();
+            System.err.printf("Query %s - picked %s (%f-%d) (%s)\n", queryID, documentID, score, ranking, fulltext);
+        } else {
+            System.err.printf("Query %s - picked nonexistant document %s (%f-%d)\n", queryID, documentID, score, ranking);
+        }
     }
 
-    public com.TeamHotel.inverindex.IndexDocument getDocumentByIndex(int randomNum) {
-        return null;
+    /**
+     * retrieve the fulltext for a document.
+     * @param documentID - the TREC id of the document
+     * @return - the fulltext for the document stored in the index
+     */
+    @NotNull
+    public Optional<String> getFulltextById(@NotNull final String documentID) {
+        try {
+            PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_DOCUMENT_FULLTEXT));
+            s.setString(1, documentID);
+            ResultSet result = s.executeQuery();
+            if (result.first()) {
+                return Optional.of(result.getString("FULL_TEXT"));
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return Optional.empty();        
     }
 
+    /**
+     * Get the document vector for some document in the index.
+     * You can use this to poll for random documents (using a random number).
+     * Don't call this in a loop to retrieve all documents.  That would be very slow and error prone.
+     * @param idx - a number representing the location to grab a document from.
+     * This is not the TREC id, and these indices should not be used without good reason.
+     * @return Pair<DocID, DocVector> if the specified document exists, else None
+     */
+    @NotNull
+    public Optional<Pair<String, ArrayList<Double>>> getDocumentVectorByIndex(int idx) {
+        try {
+            PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_VECTOR_BY_INDEX));
+            s.setInt(1, idx);
+            ResultSet result = s.executeQuery();
+            if (result.first()) {
+                @NotNull final String id = result.getString("DOCID");
+                final Scanner vectorScanner = new Scanner(result.getString("VECTOR"));
+                final ArrayList<Double> vector = new ArrayList<>(300);
+                vectorScanner.forEachRemaining((String d) -> vector.add(Double.parseDouble(d)));
+                return Optional.of(Pair.of(id, vector));
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        } catch (NumberFormatException ex) {
+            System.err.println("Malformed document vector in database");
+            ex.printStackTrace();
+        } catch (NullPointerException ex) {
+            System.err.println("getDocumentVectorByIndex.  The supplied index did not point to a valid document");
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * count the number of documents in the index.
+     * This does not count fake documents.
+     * @return the number of real documents in the index
+     */
     public int getNumDocuments() {
-        return 0;
+        try {
+            PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.COUNT_DOCUMENTS));
+            ResultSet result = s.executeQuery();
+            if (result.first()) {
+                int numDocuments = result.getInt(1);
+                result.close();
+                return numDocuments;
+            } else {
+                result.close();
+                throw new SQLException("Failed to count number of documents in index");
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return -1;
     }
 
-    public void addFakeLeader(int clusterId, int[] docVector) {
+    /**
+     * add a fake cluster leader to the index.
+     * After computing the centroid of a cluster we need to create a fake leader document to represent
+     * the centroid in the next pass through the clustering algorithm.
+     * @param clusterId - the cluster the leader belongs to
+     * @param docVector - the vector representing the leader
+     * @return true if the leader was successfully added
+     */
+    public boolean addFakeLeader(final int clusterId, @NotNull final ArrayList<Double> docVector) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.INSERT_FAKE_LEADER));
+            final int id = nextId.getAndIncrement();
+            final StringBuilder vectorString = new StringBuilder();
+            docVector.forEach(d -> vectorString.append(String.format(" %f", d)));
+            vectorString.deleteCharAt(0);
+            s.setInt(1, id);
+            s.setInt(2, clusterId);
+            s.setString(3, vectorString.toString());
+            if (s.executeUpdate() == 1) {
+                return true;
+            }
+            throw new SQLException("Failed to add fake leader into documents");
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return false;
     }
 
-    public Iterator<Triple<String, ArrayList<Double>, Integer>> getClusterLeaders() {
-        return null;
+    /**
+     * returns an iterator that iterates over all cluster leaders.
+     * If a cluster has multiple leaders they will both be returned.
+     * Remember to call clearLeaders() before assigning new cluster leaders.
+     * To create a leader, call createFakeLeader(clusterId, vector).
+     * @return - an iterator over all custer leaders
+     */
+    @NotNull
+    public Iterator<Pair<Integer, ArrayList<Double>>> getClusterLeaders() {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_LEADER_VECTORS));
+            ResultSet results = s.executeQuery();
+            if (results.first()) {
+                class LeaderIterator implements Iterable<Pair<Integer, ArrayList<Double>>> {
+                    boolean more = true;
+                    boolean getNext = true;
+                    Pair<Integer, ArrayList<Double>> curr = null;
+                    @Override
+                    public Iterator<Pair<Integer, ArrayList<Double>>> iterator() {
+                        return new Iterator<Pair<Integer,ArrayList<Double>>>() {
+                            @Override
+                            public boolean hasNext() {
+                                if (more) {
+                                    try {
+                                        if (!getNext) {
+                                            return curr != null;
+                                        } else if (results.next()) {
+                                            final int docClass = results.getInt("CLASS");
+                                            final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
+                                            curr = Pair.of(docClass, vec);
+                                            return true;
+                                        }
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                    more = false;
+                                    curr = null;
+                                    getNext = false;
+                                    try {
+                                        results.close();
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                }
+                                return false;
+                            }
+
+                            @Override
+                            @NotNull
+                            public Pair<Integer, ArrayList<Double>> next() throws NoSuchElementException {
+                                if (hasNext()) {
+                                    getNext = true;
+                                    return curr;
+                                }
+                                more = false;
+                                throw new NoSuchElementException();
+                            }
+                        };
+                    }
+                }
+                return new LeaderIterator().iterator();
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return Collections.emptyIterator();
     }
 
+    /**
+     * returns an iterator that iterates over all distinct cluster ids in the index.
+     * Valid cluster ids are any integer > 0.
+     * The words cluster and class are used interchangeably.
+     * @return
+     */
+    @NotNull
     public Iterator<Integer> getClusters() {
-        return null;
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_CLUSTERS));
+            ResultSet results = s.executeQuery();
+            if (results.first()) {
+                class ClusterIterator implements Iterable<Integer> {
+                    boolean getNext = true;
+                    Integer curr = 0;
+                    boolean more = true;
+
+                    @Override
+                    public Iterator<Integer> iterator() {
+                        return new Iterator<Integer>() {
+                            @Override
+                            public boolean hasNext() {
+                                if (more) {
+                                    try {
+                                        if (!getNext) {
+                                            return curr != 0;
+                                        } else if (results.next()) {
+                                            curr = results.getInt("CLASS");
+                                            getNext = false;
+                                            return curr != 0;
+                                        }
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                    more = false;
+                                    curr = 0;
+                                    getNext = false;
+                                    try {
+                                        results.close();
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                }
+                                return false;
+                            }
+
+                            @Override
+                            @NotNull
+                            public Integer next() {
+                                if (hasNext()) {
+                                    getNext = true;
+                                    return curr;
+                                }
+                                more = false;
+                                throw new NoSuchElementException();
+                            }
+                        };
+                    }
+                }
+                return new ClusterIterator().iterator();
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return Collections.emptyIterator();
     }
 
-    public Iterator<Pair<String, ArrayList<Double>>> getDocumentsInCluster(int i, int j) {
-        return null;
+    /**
+     * returns an iterator that iterates over all documents in a cluster
+     * Valid cluster ids are any integer > 0.
+     * The words cluster and class are used interchangeably.
+     * It is possible for a cluster to be empty or very small depending on the clustering algorithm used.
+     * It is also possible for clusters to be very large.  Make sure the code is generating clusters of a reasonable size.
+     * @param clusterId - the id of the cluster to retrieve
+     * @return - an iterator over all documents in the cluster.
+     */
+    @NotNull
+    public Iterator<Pair<String, ArrayList<Double>>> getDocumentsInCluster(int clusterId) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_DOCUMENT_VECTOR_BY_CLASS));
+            s.setInt(1, clusterId);
+            ResultSet results = s.executeQuery();
+            if (results.first()) {
+                class ClusterDocumentIterator implements Iterable<Pair<String, ArrayList<Double>>> {
+                    boolean getNext = true;
+                    boolean more = true;
+                    Pair<String, ArrayList<Double>> curr = null;
+                    @Override
+                    public Iterator<Pair<String, ArrayList<Double>>> iterator() {
+                        return new Iterator<Pair<String,ArrayList<Double>>>() {
+                            @Override
+                            public boolean hasNext() {
+                                if (more) {
+                                    try {
+                                        if (!getNext) {
+                                            return curr != null;
+                                        } else if (results.next()) {
+                                            @NotNull final String docId = results.getString("DOCID");
+                                            @NotNull final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
+                                            curr = Pair.of(docId, vec);
+                                            getNext = false;
+                                            return true;
+                                        }
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+
+                                    more = false;
+                                    getNext = false;
+                                    curr = null;
+                                    try {
+                                        results.close();
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                }
+                                return false;
+                            }
+
+                            @Override
+                            public Pair<String, ArrayList<Double>> next() {
+                                if (hasNext()) {
+                                    getNext = true;
+                                    return curr;
+                                }
+                                more = false;
+                                throw new NoSuchElementException();
+                            }
+                            
+                        };
+                    }
+                    
+                }
+                return new ClusterDocumentIterator().iterator();
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return Collections.emptyIterator();
     }
 
-    public Iterator<Triple<String, ArrayList<Double>, Integer>> getAllDocuments(int i, int j) {
-        return null;
+    /**
+     * returns an iterator that iterates over all documents in the specified range.
+     * Using minIdx and maxDocuments you can can iterate over the corpus in parts.  Perhaps 10000 at a time.
+     * @param minIdx - how many documents to skip before iterating, 0 starts at the first document.
+     * @param maxDocuments - max number of documents to iterate over.
+     * @return an iterator over the specified range of documents in the index.
+     */
+    @NotNull
+    public Iterator<Triple<String, Integer, ArrayList<Double>>> getAllDocuments(final int minIdx, final int maxDocuments) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_ALL_DOCID_VECTOR_CLUSTER));
+            s.setInt(1, minIdx);
+            s.setInt(2, minIdx + maxDocuments);
+            ResultSet results = s.executeQuery();
+            if (results.first()) {
+                class AllDocumentIterator implements Iterable<Triple<String, Integer,  ArrayList<Double>>> {
+                    boolean more = true;
+                    boolean getNext = true;
+                    Triple<String, Integer, ArrayList<Double>> curr = null;
+                    @Override
+                    public Iterator<Triple<String, Integer, ArrayList<Double>>> iterator() {
+                        return new Iterator<Triple<String, Integer, ArrayList<Double>>>() {
+                            @Override
+                            public boolean hasNext() {
+                                if (more) {
+                                    try {
+                                        if (!getNext) {
+                                            return curr != null;
+                                        } else if (results.next()) {
+                                            @NotNull final String docId = results.getString("DOCID");
+                                            final int classId = results.getInt("CLASS");
+                                            final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
+                                            curr = Triple.of(docId, classId, vec);
+                                            return true;
+                                        }
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+
+                                    more = false;
+                                    getNext = false;
+                                    curr = null;
+                                    try {
+                                        results.close();
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                }
+                                return false;
+                            }
+                            @Override
+                            public Triple<String, Integer, ArrayList<Double>> next() {
+                                if (hasNext()) {
+                                    getNext = true;
+                                    return curr;
+                                }
+                                more = false;
+                                throw new NoSuchElementException();
+                            }   
+                        };
+                    }
+                }
+                return new AllDocumentIterator().iterator();
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return Collections.emptyIterator();
     }
 
-    public void removeUnusedFakeDocuments() {
+    public boolean setDocumentClass(@NotNull final String docId, final int clusterId) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.UPDATE_DOCUMENT_CLASS));
+            s.setString(1, docId);
+            s.setInt(2, clusterId);
+            final int affectedRow = s.executeUpdate();
+            if (affectedRow == 1) {
+                return true;
+            }
+            System.err.printf("Updated %d rows, expected 1\n", affectedRow);
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return false;
     }
 
-    public void setDocumentClass(String docId, int clusterId) {
+    public boolean setDocumentVector(@NotNull final String docID, @NotNull final ArrayList<Double> docVector) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.UPDATE_DOCUMENT_VECTOR));
+            final String vecString = vectorString(docVector);
+            s.setString(1, docID);
+            s.setString(2, vecString);
+            int affectedRows = s.executeUpdate();
+            s.close();
+            if (affectedRows == 1) {
+                return true;
+            }
+            System.err.printf("Error setting document vector.  Expected 1 affected row, got %d\n", affectedRows);
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return false;
     }
 
-    public Iterator<Integer> getClusterIds() {
-        return null;
+        /**
+     * returns an iterator that iterates over all documents, providing the document id
+     * @param offset - how many documents to skip before iterating.  0 will start at the first document.
+     * @param maxDocuments - maximum number of documents to iterate over.  Set it really high to iterate over everything.
+     * @return An iterator of Pair<DocID, Term-frequencies> over all documents in the specified range
+     */
+    @NotNull
+    public Iterator<Pair<String, Map<String, Integer>>> getTokenizedDocuments(int offset, int maxDocuments) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_TOKENIZED_DOCUMENTS));
+            s.setInt(1, offset);
+            s.setInt(2, offset + maxDocuments);
+            final ResultSet results = s.executeQuery();
+            if (results.first()) {
+                class TokenizedIterator implements Iterable<Pair<String, Map<String, Integer>>> {
+                    boolean more = true;
+                    boolean getNext = true;
+                    Pair<String, Map<String, Integer>> curr = null;
+                    @Override
+                    public Iterator<Pair<String, Map<String, Integer>>> iterator() {
+                        return new Iterator<Pair<String,Map<String,Integer>>>() {
+                            @Override
+                            public boolean hasNext() {
+                                if (more) {
+                                    try {
+                                        if (!getNext) {
+                                            return curr != null;
+                                        } else if (results.next()) {
+                                            getNext = false;
+                                            @NotNull final String docId = results.getString("DOCID");
+                                            @NotNull final Map<String, Integer> terms = parseTermMap(results.getString("PREPROCESSED_TEXT"));
+                                            curr = Pair.of(docId, terms);
+                                            return true;
+                                        }
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                    more = false;
+                                    curr = null;
+                                    getNext = false;
+                                    try {
+                                        results.close();
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                }
+                                return false;
+                            }
+
+                            @Override
+                            public Pair<String, Map<String, Integer>> next() {
+                                if (hasNext()) {
+                                    getNext = true;
+                                    return curr;
+                                }
+                                more = false;
+                                throw new NoSuchElementException();
+                            }
+                            
+                        };
+                    }
+                    
+                }
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return Collections.emptyIterator();
     }
 
-    public Iterator<Pair<String, Map<String, Integer>>> getTokenizedDocuments(int offset, int i) {
-        return null;
+    /**
+     * Remove cluster leaders from the index.  Does not remove the actual documents, only their status as leaders.
+     * It is possible that the number of clusters will reduce over time.  A little is okay, but if the number of clusters
+     * halves, there is probably an issue with the algorithm.  The return value of this function indicates how many clusters
+     * have at least one document.
+     * @return the number of leaders removed from the database.
+     */
+    public int clearLeaders() {
+        int affectedRows = 0;
+        try {
+            PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.UNSET_LEADERS));
+            affectedRows = s.executeUpdate();
+            s.close();
+            s = connection.prepareStatement(queryStrings.get(QUERY.DELETE_EXTRA_FAKES));
+            s.execute();
+            s.close();
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return affectedRows;
     }
 
-    public void setDocumentVector(String docID, double[] docVector) {
+    @NotNull
+    private final ArrayList<Double> parseVector(@NotNull final String vectorString) throws SQLException {
+        @NotNull final ArrayList<Double> vec = new ArrayList<>(WordSimilarity.numDimensions);
+        try {
+            @NotNull final Scanner vecScanner = new Scanner(vectorString);
+            vecScanner.forEachRemaining(d -> vec.add(Double.parseDouble(d)));
+            vecScanner.close();
+            if (vec.size() == WordSimilarity.numDimensions) {
+                return vec;
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        throw new SQLException(String.format(
+            "Document vector had %d dimensions, need %d\n", 
+            vec.size(), WordSimilarity.numDimensions));
     }
 
+    @NotNull
+    private final String vectorString(@NotNull final ArrayList<Double> vector) throws IllegalArgumentException {
+        if (vector.size() != WordSimilarity.numDimensions) {
+            throw new IllegalArgumentException(
+                String.format("Document vectors need %d dimensions, provided %d\n", 
+                WordSimilarity.numDimensions, vector.size()));
+        }
+        final StringBuilder vecString = new StringBuilder();
+        vector.forEach(d -> vecString.append(String.format(" %f", d)));
+        vecString.deleteCharAt(0);
+        return vecString.toString();
+    }
+
+    @NotNull
+    private final Map<String, Integer> parseTermMap(@NotNull final String termString) throws SQLException {
+        return new HashMap<>();
+    }
 }
 

@@ -4,10 +4,9 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 import com.TeamHotel.inverindex.Index;
-import com.TeamHotel.inverindex.*;
-
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
@@ -24,20 +23,18 @@ public class Clustering {
         // example code that might be helpful.
         int num = idx.getNumDocuments();
         int randomNum = RandomUtils.nextInt(0, num);
-        IndexDocument randomDoc = idx.getDocumentByIndex(randomNum);
+        Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector = idx.getDocumentVectorByIndex(randomNum);
         int clusterId = 1;
 
-        Iterator<Triple<String, ArrayList<Double>, Integer>> leaderIterator = idx.getClusterLeaders();
-        Iterator<Integer> clusterIterator = idx.getClusterIds();
-        Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(clusterId, 10000); // maximum documents to retrieve
-        Iterator<Triple<String, ArrayList<Double>, Integer>> documentIterator = idx.getAllDocuments(0, 100000000); // documents to skip (offset), max documents to retrieve
+        Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
+        Iterator<Integer> clusterIterator = idx.getClusters();
+        Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(clusterId); // maximum documents to retrieve
+        Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, 100000000); // documents to skip (offset), max documents to retrieve
 
 
-        int[] docVector = new int[300]; // or however long the vector is.
+        ArrayList<Double> docVector = new ArrayList<>(WordSimilarity.numDimensions);
 
         idx.addFakeLeader(clusterId, docVector);
-
-        idx.removeUnusedFakeDocuments();
 
         String docId = "asfvwevwtbvqeVQr";
         clusterId = 2;
