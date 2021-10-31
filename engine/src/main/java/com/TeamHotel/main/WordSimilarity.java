@@ -11,7 +11,7 @@ import org.apache.commons.lang3.tuple.Pair;
 public class WordSimilarity {
     public final static int numDimensions = 100; //? change this to actual number
 
-    public static void calculateWordVectors(Index idx, int offset) {
+    public static int calculateDocVectors(Index idx, String wordVectorFile, int offset, int maxDocuments) {
         Iterator<Pair<String, Map<String, Integer>>> documentIterator = idx.getTokenizedDocuments(offset, 100000000); // perhaps use smaller number for testing
         idx.beginTransaction(); // this speeds things up.
 
@@ -34,6 +34,7 @@ public class WordSimilarity {
         });
 
         idx.commitTransaction(); // if we run out of memory, removing this and beginTransaction() should help.
-    }
 
+        return 0;
+    }
 }

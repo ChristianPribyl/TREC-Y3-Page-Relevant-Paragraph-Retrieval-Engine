@@ -18,8 +18,11 @@ public class Clustering {
      * clusterDocuments should use a clustering algorithm to assign each document to a cluster.
      * @param idx - The index containing each of the documents.  Cluster info should be added to this index using the provided functions.
      * @param maxClusteringRepititions - The max number of repititions of the clustering algorithm to use.  Using fewer is also fine.
+     * @param maxDocuments
+     * @param offset
+     * @return 
      */
-    public static void clusterDocuments(@NotNull final Index idx, int maxClusteringRepititions) {
+    public static int clusterDocuments(@NotNull final Index idx, int maxClusteringRepititions, int offset, int maxDocuments) {
         // example code that might be helpful.
         int num = idx.getNumDocuments();
         int randomNum = RandomUtils.nextInt(0, num);
@@ -39,6 +42,8 @@ public class Clustering {
         String docId = "asfvwevwtbvqeVQr";
         clusterId = 2;
         idx.setDocumentClass(docId, clusterId);
+
+        return 0;
         
     }
 

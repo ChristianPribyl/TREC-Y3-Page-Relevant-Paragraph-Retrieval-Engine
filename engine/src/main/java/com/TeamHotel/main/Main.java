@@ -86,23 +86,69 @@ public class Main {
                 }
                 break;
             }
-            case "index-db": {
-                if (args.length == 4) {
-                    final String vocabFile = args[1];
+            case "create-empty-index": {
+                if (args.length == 3) {
                     final String dbname = args[2];
-                    final String cborCorpus = args[3];
-                    final int maxClusteringRepititions = 100;
-                    final int offset = 0; // number of documents to skip
-
-                    List<String> vocab = Preprocess.loadVocab(vocabFile);
-
-                    Index idx = Index.createNew(dbname).get();
-                        
-                    idx.addNewDocuments(cborCorpus, vocab.stream().collect(Collectors.toSet())); // INDEX(DOCID, FULLTEXT, PREPROCESSED_TOKENS, TOKEN_SET, CLASS="", VECTOR=Array_all_0, LEADER=FALSE, FAKE=FALSE)
-                    WordSimilarity.calculateWordVectors(idx, offset);
-                    Clustering.clusterDocuments(idx, maxClusteringRepititions);
+                    System.err.println("Creating new empty index");
+                    Optional<Index> idx = Index.createNew(dbname);
+                    if (idx.isEmpty()) {
+                        System.err.println("Index creation failed");
+                    } else {
+                        System.err.println("Index creation succeeded");
+                    }
                 } else {
-                    dumpIndexDbUsage();
+                    System.err.println("Usage: ir-engine create-empty-index <index-location>");
+                }
+                break;
+            }
+            case "add-documents": {
+                if (args.length == 5) {
+                    final String dbname = args[2];
+                    final String vocabFile = args[3];
+                    final String cborCorpus = args[4];
+                    final int offset = 0;
+                    final int maxDocuments = 100000000;
+                    System.out.println("Loading vocab");
+                    final List<String> vocab = Preprocess.loadVocab(vocabFile);
+                    System.err.println("Instantiating Index");
+                    Index idx = Index.load(dbname).get();
+                    System.err.println("Adding documents to index");
+                    int numAdded = idx.addNewDocuments(cborCorpus, vocab.stream().collect(Collectors.toSet()), offset, maxDocuments);
+                    System.err.printf("Added %d documents to the Index\n", numAdded);
+                } else {
+                    System.err.println("Usage: ir-engine add-documents <index-location> <vocab-file> <corpus-offset> <max-to-add>");
+                }
+                break;
+            }
+            case "calculate-vectors": {
+                if (args.length == 6) {
+                    final String dbname = args[2];
+                    final String wordVectorFile = args[3];
+                    final int offset = Integer.parseInt(args[4]);
+                    final int maxDocuments = Integer.parseInt(args[5]);
+                    System.err.println("Instantiating Index");
+                    Index idx = Index.load(dbname).get();
+                    System.err.println("Calculating document vectors");
+                    int numCalculated = WordSimilarity.calculateDocVectors(idx, wordVectorFile, offset, maxDocuments);
+                    System.err.printf("Calculated vectors for %d documents\n", numCalculated);
+                } else {
+                    System.err.println("Usage: ir-engine calculate-vectors <index-location> <word-vector-file> <corpus-offset> <max-to-process>");
+                }
+                break;
+            }
+            case "cluster": {
+                if (args.length == 6) {
+                    final String dbname = args[2];
+                    final int numClusterPasses = Integer.parseInt(args[3]);
+                    final int offset = Integer.parseInt(args[4]);
+                    final int maxDocuments = Integer.parseInt(args[5]);
+                    System.err.println("Instantiating Index");
+                    Index idx = Index.load(dbname).get();
+                    System.err.println("Clustering documents");
+                    int numClusters = Clustering.clusterDocuments(idx, numClusterPasses, offset, maxDocuments);
+                    System.err.printf("Clustered %d documents\n", numClusters);
+                } else {
+                    System.err.println("Usage: ir-engine ccluster <index-location> <num-cluster-passes> <corpus-offset> <max-docs-to-cluster>");
                 }
                 break;
             }
@@ -222,7 +268,7 @@ public class Main {
     }
 
     static void usage() {
-        System.out.println("USage: ir-engine [vocab | index-db | cluster-cbor-query]\n" +
+        System.out.println("USage: ir-engine [vocab | create-empty-index | add-documents | calculate-vectors | cluster | cluster-cbor-query]\n" +
         "Run commands for specific usage instructions");
         //System.out.println("Usage: prog-4 [vocab | index | dump-index | query | cbor-query]\n" +
         //        "Run commands for specific usage instructions");

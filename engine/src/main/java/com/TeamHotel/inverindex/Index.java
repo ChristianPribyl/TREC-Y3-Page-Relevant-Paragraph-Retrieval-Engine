@@ -29,16 +29,16 @@ public class Index implements Serializable{
         queryStrings.put(QUERY.UPDATE_DOCUMENT_VECTOR,          "UPDATE DOCUMENTS SET VECTOR=? WHERE DOCID=?");
         queryStrings.put(QUERY.UPDATE_DOCUMENT_CLASS,           "UPDATE DOCUMENTS SET CLASS=? WHERE DOCID=?");
         queryStrings.put(QUERY.UNSET_LEADERS,                   "UPDATE DOCUMENTS SET LEADER=0 WHERE LEADER=1");
-        queryStrings.put(QUERY.DELETE_EXTRA_FAKES,              "DELETE FROM DOCUMENTS WHERE (FAKE=1 && LEADER=0)");
-        queryStrings.put(QUERY.SELECT_VECTOR_BY_INDEX,          "SELECT (DOCID, VECTOR) FROM DOCUMENTS WHERE ID=? && FAKE=0");
+        queryStrings.put(QUERY.DELETE_EXTRA_FAKES,              "DELETE FROM DOCUMENTS WHERE (FAKE=1 AND LEADER=0)");
+        queryStrings.put(QUERY.SELECT_VECTOR_BY_INDEX,          "SELECT DOCID, VECTOR FROM DOCUMENTS WHERE (ID=?) AND (FAKE=0)");
         queryStrings.put(QUERY.SELECT_POSTINGS,                 "SELECT POSTINGS_LIST FROM POSTINGS WHERE TERM = ?");
-        queryStrings.put(QUERY.SELECT_DOCUMENT_VECTOR_BY_CLASS, "SELECT (DOCID, VECTOR) FROM DOCUMENTS WHERE CLASS=? && FAKE=0");
-        queryStrings.put(QUERY.SELECT_LEADER_VECTORS,           "SELECT (DOCID, VECTOR) FROM DOCUMENTS WHERE LEADER=1");
-        queryStrings.put(QUERY.SELECT_DOCUMENT_FULLTEXT,        "SELECT (FULL_TEXT) FROM DOCUMENTS WHERE DOCID=?");
-        queryStrings.put(QUERY.SELECT_CLUSTERS,                 "SELECT DISCTINCT (CLASS) FROM DOCUMENTS WHERE CLASS !=0");
+        queryStrings.put(QUERY.SELECT_DOCUMENT_VECTOR_BY_CLASS, "SELECT DOCID, VECTOR FROM DOCUMENTS WHERE (CLASS=?) AND (FAKE=0)");
+        queryStrings.put(QUERY.SELECT_LEADER_VECTORS,           "SELECT DOCID, VECTOR FROM DOCUMENTS WHERE (LEADER=1)");
+        queryStrings.put(QUERY.SELECT_DOCUMENT_FULLTEXT,        "SELECT (FULL_TEXT) FROM DOCUMENTS WHERE (DOCID=?)");
+        queryStrings.put(QUERY.SELECT_CLUSTERS,                 "SELECT DISTINCT (CLASS) FROM DOCUMENTS WHERE (CLASS !=0)");
         queryStrings.put(QUERY.COUNT_DOCUMENTS,                 "SELECT COUNT(*) FROM DOCUMENTS");
-        queryStrings.put(QUERY.SELECT_ALL_DOCID_VECTOR_CLUSTER, "SELECT (DOCID, VECTOR, CLASS) FROM DOCUMENTS WHERE FAKE=0 && ID >= ? && ID < ?");
-        queryStrings.put(QUERY.SELECT_TOKENIZED_DOCUMENTS,      "SELECT (DOCID, PREPROCESSED_TEXT) FROM DOCUMENTS WHERE FAKE=0 && ID >= ? && ID < ?");
+        queryStrings.put(QUERY.SELECT_ALL_DOCID_VECTOR_CLUSTER, "SELECT DOCID, VECTOR, CLASS FROM DOCUMENTS WHERE (FAKE=0) AND (ID >= ?) AND (ID < ?)");
+        queryStrings.put(QUERY.SELECT_TOKENIZED_DOCUMENTS,      "SELECT DOCID, PREPROCESSED_TEXT FROM DOCUMENTS WHERE (FAKE=0) AND (ID >= ?) AND (ID < ?)");
     }
     enum QUERY { INSERT_POSTINGS, SELECT_POSTINGS, INSERT_DOCUMENT, UPDATE_DOCUMENT_VECTOR, UPDATE_DOCUMENT_CLASS,
     INSERT_FAKE_LEADER, SELECT_DOCUMENT_VECTOR_BY_CLASS, SELECT_LEADER_VECTORS, SELECT_DOCUMENT_FULLTEXT, DELETE_EXTRA_FAKES,
@@ -104,7 +104,8 @@ public class Index implements Serializable{
             try {
                 connection.prepareStatement(s).close();
             } catch (SQLException ex) {
-                ex.printStackTrace();
+                System.out.printf("Bad SQL: {%s}\n", s);
+                //ex.printStackTrace();
                 validSQL.set(false);
             }
         });
@@ -115,7 +116,7 @@ public class Index implements Serializable{
 
     private void resetDatabase() throws SQLException {
         try {
-            PreparedStatement s = connection.prepareStatement("DROP TABLE INDEX");
+            PreparedStatement s = connection.prepareStatement("DROP TABLE DOCUMENTS");
             s.executeUpdate();
             s.close();
         } catch (SQLException ex) {
@@ -144,15 +145,15 @@ public class Index implements Serializable{
         //ID, DOCID, FULLTEXT, PREPROCESSED_TOKENS, TOKEN_SET, CLASS=0, VECTOR=Array_all_0, LEADER=FALSE, FAKE=FALSE
         s = connection.prepareStatement(
         "CREATE TABLE DOCUMENTS (" +
-            "ID INT NOT NULL," +
-            "DOCID TEXT PRIMARY KEY NOT NULL," +
+            "ID INT   NOT NULL," +
+            "DOCID TEXT PRIMARY KEY," +
             "FULL_TEXT TEXT," +
             "PREPROCESSED_TEXT TEXT," +
             "TOKEN_SET TEXT," +
             "CLASS INT," +
             "VECTOR TEXT," +
-            "LEADER BIT NOT NULL," +
-            "FAKE BIT NOT NULL)");
+            "LEADER INT NOT NULL," +
+            "FAKE INT NOT NULL)");
         s.executeUpdate();
         s.close();
         System.err.println("Created table INDEX");;
@@ -206,7 +207,9 @@ public class Index implements Serializable{
             s.setString(4, tokenString.toString());
             final StringBuilder uniqueTokens = new StringBuilder();
             tokenSet.forEach((t, tf) -> uniqueTokens.append(",").append(t).append(":").append(tf));
-            uniqueTokens.subSequence(1, uniqueTokens.length());
+            if (uniqueTokens.length() > 0) {
+                uniqueTokens.subSequence(1, uniqueTokens.length());
+            }
             s.setString(5, uniqueTokens.toString());
             if (0 == s.executeUpdate()) {
                 System.err.println("Failed to insert " + docID + " into database");
@@ -223,10 +226,10 @@ public class Index implements Serializable{
      * @param vocab - the set of words we care about.  The words should already be preprocessed and stemmed.
      * This is necessary because indexing will take far too long if we consider all words.
      */
-    public void addNewDocuments(@NotNull final String cborParagraphs, @NotNull final Set<String> vocab) {
-        Preprocess.processParagraphs(cborParagraphs, (id, text, tokenized, tokens) -> {
+    public int addNewDocuments(@NotNull final String cborParagraphs, @NotNull final Set<String> vocab, int offset, int max) {
+        return Preprocess.processParagraphs(cborParagraphs, (id, text, tokenized, tokens) -> {
             addNewDocument(id, text, tokenized, tokens);
-        }, vocab, 0, 100000000);
+        }, vocab, offset, max);
     }
 
     /**
@@ -257,7 +260,7 @@ public class Index implements Serializable{
             PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_DOCUMENT_FULLTEXT));
             s.setString(1, documentID);
             ResultSet result = s.executeQuery();
-            if (result.first()) {
+            if (result.next()) {
                 return Optional.of(result.getString("FULL_TEXT"));
             }
         } catch (SQLException ex) {
@@ -280,7 +283,7 @@ public class Index implements Serializable{
             PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_VECTOR_BY_INDEX));
             s.setInt(1, idx);
             ResultSet result = s.executeQuery();
-            if (result.first()) {
+            if (result.next()) {
                 @NotNull final String id = result.getString("DOCID");
                 final Scanner vectorScanner = new Scanner(result.getString("VECTOR"));
                 final ArrayList<Double> vector = new ArrayList<>(300);
@@ -307,7 +310,7 @@ public class Index implements Serializable{
         try {
             PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.COUNT_DOCUMENTS));
             ResultSet result = s.executeQuery();
-            if (result.first()) {
+            if (result.next()) {
                 int numDocuments = result.getInt(1);
                 result.close();
                 return numDocuments;
@@ -335,7 +338,9 @@ public class Index implements Serializable{
             final int id = nextId.getAndIncrement();
             final StringBuilder vectorString = new StringBuilder();
             docVector.forEach(d -> vectorString.append(String.format(" %f", d)));
-            vectorString.deleteCharAt(0);
+            if (vectorString.length() > 0) {
+                vectorString.deleteCharAt(0);
+            }
             s.setInt(1, id);
             s.setInt(2, clusterId);
             s.setString(3, vectorString.toString());
@@ -361,7 +366,7 @@ public class Index implements Serializable{
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_LEADER_VECTORS));
             ResultSet results = s.executeQuery();
-            if (results.first()) {
+            if (results.next()) {
                 class LeaderIterator implements Iterable<Pair<Integer, ArrayList<Double>>> {
                     boolean more = true;
                     boolean getNext = true;
@@ -428,7 +433,7 @@ public class Index implements Serializable{
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_CLUSTERS));
             ResultSet results = s.executeQuery();
-            if (results.first()) {
+            if (results.next()) {
                 class ClusterIterator implements Iterable<Integer> {
                     boolean getNext = true;
                     Integer curr = 0;
@@ -499,7 +504,7 @@ public class Index implements Serializable{
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_DOCUMENT_VECTOR_BY_CLASS));
             s.setInt(1, clusterId);
             ResultSet results = s.executeQuery();
-            if (results.first()) {
+            if (results.next()) {
                 class ClusterDocumentIterator implements Iterable<Pair<String, ArrayList<Double>>> {
                     boolean getNext = true;
                     boolean more = true;
@@ -572,7 +577,7 @@ public class Index implements Serializable{
             s.setInt(1, minIdx);
             s.setInt(2, minIdx + maxDocuments);
             ResultSet results = s.executeQuery();
-            if (results.first()) {
+            if (results.next()) {
                 class AllDocumentIterator implements Iterable<Triple<String, Integer,  ArrayList<Double>>> {
                     boolean more = true;
                     boolean getNext = true;
@@ -637,7 +642,7 @@ public class Index implements Serializable{
             if (affectedRow == 1) {
                 return true;
             }
-            System.err.printf("Updated %d rows, expected 1\n", affectedRow);
+            System.err.printf("setDocumentClass() - Updated %d rows, expected 1\n", affectedRow);
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
@@ -675,7 +680,7 @@ public class Index implements Serializable{
             s.setInt(1, offset);
             s.setInt(2, offset + maxDocuments);
             final ResultSet results = s.executeQuery();
-            if (results.first()) {
+            if (results.next()) {
                 class TokenizedIterator implements Iterable<Pair<String, Map<String, Integer>>> {
                     boolean more = true;
                     boolean getNext = true;
@@ -725,6 +730,7 @@ public class Index implements Serializable{
                     }
                     
                 }
+                return new TokenizedIterator().iterator();
             }
         } catch (SQLException ex) {
             ex.printStackTrace();
@@ -782,7 +788,9 @@ public class Index implements Serializable{
         }
         final StringBuilder vecString = new StringBuilder();
         vector.forEach(d -> vecString.append(String.format(" %f", d)));
-        vecString.deleteCharAt(0);
+        if (vecString.length() > 0) {
+            vecString.deleteCharAt(0);
+        }
         return vecString.toString();
     }
 

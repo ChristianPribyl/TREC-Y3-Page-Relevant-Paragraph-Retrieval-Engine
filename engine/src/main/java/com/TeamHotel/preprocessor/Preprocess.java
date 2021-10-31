@@ -288,8 +288,7 @@ public class Preprocess {
         void newDoc(String id, String text, List<String> tokenized, TreeMap<String, Integer> tokens);
     }
 
-    public static void processParagraphs(@NotNull final String cborFile, @NotNull final AddDocumentsInterface add, Set<String> vocab, int offset, int maxDocuments) {
-
+    public static int processParagraphs(@NotNull final String cborFile, @NotNull final AddDocumentsInterface add, Set<String> vocab, int offset, int maxDocuments) {
         ids = new AtomicInteger(0);
         numProcessed = new AtomicInteger(0);
         int numThreads = 1;
@@ -306,7 +305,7 @@ public class Preprocess {
             documentIterator = DeserializeData.iterParagraphs(documentStream);
         } catch (Exception ex) {
             ex.printStackTrace();
-            return;
+            return 0;
         }
         
         for (int i = 0; i < offset; i++) documentIterator.next(); // This will throw if the offset is greater than the total number of paragraphs.
@@ -371,6 +370,16 @@ public class Preprocess {
             }));
             threads[i].start();
         }
+
+        for (int i = 0; i < numThreads; i++) {
+            try {
+                threads[i].join();
+            } catch (InterruptedException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        return numProcessed.getPlain();
     }
 
 
