@@ -104,6 +104,20 @@ public class Preprocess {
         return "";
     }
 
+    @NotNull
+    public static List<String> preprocessWords(@NotNull final List<String> words) {
+        Iterator<String> it = words.iterator();
+        final StringBuilder wordsString = new StringBuilder(it.next());
+        it.forEachRemaining(s -> wordsString.append(String.format(" %s", s)));
+        Map<String, String> query = new HashMap<>();
+        query.put("query", wordsString.toString());
+        Optional<ConcurrentHashMap<String, Integer>> v = preprocess(query).values().stream().findAny();
+        if (v.isPresent()) {
+            return v.get().keySet().stream().collect(Collectors.toList());
+        }
+        return new LinkedList<>();
+    }
+
     private static Set<String> loadStopWords() {
         Set<String> stopWords = new HashSet<>();
         try {
@@ -382,8 +396,55 @@ public class Preprocess {
         return numProcessed.getPlain();
     }
 
+    public static final Set<String> extractCorpusVocab(@NotNull final String cborFile, final int offset, final int maxDocuments) {
+        final Set<String> stopWords = loadStopWords();
+        final SnowballStemmer stemmer = new porterStemmer();
+        Iterator<Data.Paragraph> documentIterator;
+        try {
+            final FileInputStream documentStream  = new FileInputStream(cborFile);
+            System.err.println("file opened");
+            documentIterator = DeserializeData.iterParagraphs(documentStream);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return new HashSet<>();
+        }
 
-    public static Map<String, List<List<String>>> readFacetedQueries(String cborQueryFile) {
+        for (int i = 0; i < offset; i++) {
+            documentIterator.next();
+        }
+
+        final Set<String> vocab = new TreeSet<>();
+
+        for (int i = 0; i < maxDocuments && documentIterator.hasNext(); i++) {
+            final Data.Paragraph paragraph = documentIterator.next();
+            final String fulltext = paragraph.getTextOnly();
+            // paragraph text -> token stream
+            final Set<String> uniqueTerms = List.of(fulltext.toLowerCase()
+            .replaceAll("\\p{Punct}|\\d|\\p{Cntrl}", " ").split("\\s+")).stream()
+            .filter(w -> !stopWords.contains(w))
+            // stem tokens
+            .map(w -> {
+                stemmer.setCurrent(w);
+                stemmer.stem();
+                return stemmer.getCurrent();
+            })
+            // drop small terms
+            .filter(t -> (t.length() > _minTokenSize))
+            .collect(Collectors.toSet());
+            vocab.addAll(uniqueTerms);
+            if ((i+1) % 20000 == 0) {
+                System.err.printf("Parsed %d documents\n", i+1);
+            }
+        }
+
+        return vocab;
+    }
+
+    public static Map<String, List<List<String>>> preprocessFacetedQueries(String cborQueryFile) {
+        return null;
+    }
+
+    public static Set<String> getFacetedQueryVocabulary(Map<String, List<List<String>>> queries) {
         return null;
     }
 }

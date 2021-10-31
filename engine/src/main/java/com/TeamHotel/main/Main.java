@@ -1,20 +1,28 @@
 package com.TeamHotel.main;
 
-import com.TeamHotel.preprocessor.Preprocess;
-
-import org.apache.commons.lang3.tuple.Pair;
-
-import com.TeamHotel.inverindex.*;
-
-import com.TeamHotel.merge_queries.Merge_Queries;
-import com.TeamHotel.merge_queries.Ranker;
-
-import java.util.*;
+import java.io.FileInputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Scanner;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.io.FileWriter;
-import java.io.IOException;
+
+import com.TeamHotel.inverindex.Index;
+import com.TeamHotel.inverindex.InvertedIndex;
+import com.TeamHotel.merge_queries.Merge_Queries;
+import com.TeamHotel.merge_queries.Ranker;
+import com.TeamHotel.preprocessor.Preprocess;
+
+import org.apache.commons.lang3.tuple.Pair;
+import org.jetbrains.annotations.NotNull;
 
 public class Main {
     public static void main(String[] args) throws IOException {
@@ -86,9 +94,77 @@ public class Main {
                 }
                 break;
             }
-            case "create-empty-index": {
+            case "query-vocab": {
                 if (args.length == 3) {
-                    final String dbname = args[2];
+                    final String cborQueryFile = args[1];
+                    final String outfile = args[2];
+                    final Map<String, List<List<String>>> queries = Preprocess.preprocessFacetedQueries(cborQueryFile);
+                    final Set<String> vocab = Preprocess.getFacetedQueryVocabulary(queries);
+                    try {
+                        final FileWriter outf = new FileWriter(outfile);
+                        vocab.forEach(w -> {
+                            try {
+                                outf.write(String.format("%s\n", w));
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
+                        });
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                        System.err.println("Failed to write vocab to file");
+                    }
+                } else {
+                    System.err.println("Usage: ir-engine query-vocab <cbor-queries> <outfile>");
+                }
+                break;
+            }
+            case "corpus-vocab": {
+                if (args.length == 5) {
+                    final String cborCorpus = args[1];
+                    final String outFile = args[2];
+                    final int offset = Integer.parseInt(args[3]);
+                    final int maxDocuments = Integer.parseInt(args[4]);
+                    System.err.println("Determining corpus vocabulary");
+                    Set<String> vocab = Preprocess.extractCorpusVocab(cborCorpus, offset, maxDocuments);
+                    System.err.printf("Determined vocabulary contains %d terms\n", vocab.size());
+                    try {
+                        final FileWriter outf = new FileWriter(outFile);
+                        vocab.forEach(w -> {
+                            try {
+                                outf.write(String.format("%s\n", w));
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
+                        });
+                        System.err.println("Wrote vocabulary to file");         
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                        System.err.println("Failed to write vocab to file");
+                    }           
+                } else {
+                    System.err.println("Usage: ir-engine corpus-vocab <cbor-paragraphs> <outfile> <offset> <max-paragraphs-to-parse>");
+                }
+                break;
+            }
+            case "preprocess-similarity-vectors": {
+                if (args.length == 3) {
+                    final String vectorFile = args[1];
+                    final String outFile = args[2];
+                    System.err.println("Preprocessing Word Vectors");
+                    @NotNull final Scanner inScanner = new Scanner(new FileInputStream(vectorFile));
+                    @NotNull final FileWriter outf = new FileWriter(outFile);
+                    int numProcessed = WordSimilarity.preprocessWordVectors(inScanner, outf);
+                    inScanner.close();
+                    outf.close();
+                    System.out.printf("Processed %d word vectors\n", numProcessed);
+                } else {
+                    System.out.println("Usage: ir-engine preprocess-similarity-vectors <infile> <outfile>");
+                }
+                break;
+            }
+            case "create-empty-index": {
+                if (args.length == 2) {
+                    final String dbname = args[1];
                     System.err.println("Creating new empty index");
                     Optional<Index> idx = Index.createNew(dbname);
                     if (idx.isEmpty()) {
@@ -102,12 +178,12 @@ public class Main {
                 break;
             }
             case "add-documents": {
-                if (args.length == 5) {
-                    final String dbname = args[2];
-                    final String vocabFile = args[3];
-                    final String cborCorpus = args[4];
-                    final int offset = 0;
-                    final int maxDocuments = 100000000;
+                if (args.length == 6) {
+                    final String dbname = args[1];
+                    final String vocabFile = args[2];
+                    final String cborCorpus = args[3];
+                    final int offset = Integer.parseInt(args[4]);
+                    final int maxDocuments = Integer.parseInt(args[5]);
                     System.out.println("Loading vocab");
                     final List<String> vocab = Preprocess.loadVocab(vocabFile);
                     System.err.println("Instantiating Index");
@@ -116,16 +192,16 @@ public class Main {
                     int numAdded = idx.addNewDocuments(cborCorpus, vocab.stream().collect(Collectors.toSet()), offset, maxDocuments);
                     System.err.printf("Added %d documents to the Index\n", numAdded);
                 } else {
-                    System.err.println("Usage: ir-engine add-documents <index-location> <vocab-file> <corpus-offset> <max-to-add>");
+                    System.err.println("Usage: ir-engine add-documents <index-location> <vocab-file> <corpus-file> <corpus-offset> <max-to-add>");
                 }
                 break;
             }
             case "calculate-vectors": {
-                if (args.length == 6) {
-                    final String dbname = args[2];
-                    final String wordVectorFile = args[3];
-                    final int offset = Integer.parseInt(args[4]);
-                    final int maxDocuments = Integer.parseInt(args[5]);
+                if (args.length == 5) {
+                    final String dbname = args[1];
+                    final String wordVectorFile = args[2];
+                    final int offset = Integer.parseInt(args[3]);
+                    final int maxDocuments = Integer.parseInt(args[4]);
                     System.err.println("Instantiating Index");
                     Index idx = Index.load(dbname).get();
                     System.err.println("Calculating document vectors");
@@ -137,11 +213,11 @@ public class Main {
                 break;
             }
             case "cluster": {
-                if (args.length == 6) {
-                    final String dbname = args[2];
-                    final int numClusterPasses = Integer.parseInt(args[3]);
-                    final int offset = Integer.parseInt(args[4]);
-                    final int maxDocuments = Integer.parseInt(args[5]);
+                if (args.length == 5) {
+                    final String dbname = args[1];
+                    final int numClusterPasses = Integer.parseInt(args[2]);
+                    final int offset = Integer.parseInt(args[3]);
+                    final int maxDocuments = Integer.parseInt(args[4]);
                     System.err.println("Instantiating Index");
                     Index idx = Index.load(dbname).get();
                     System.err.println("Clustering documents");
@@ -222,7 +298,7 @@ public class Main {
                     //
                     // Each query facet should be treated like a normal query.
                     // For each query id, we query each individual facet query, and merge the results.
-                    Map<String, List<List<String>>> facetedQueries = Preprocess.readFacetedQueries(cborQueryFile);
+                    Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
 
                     Index idx = Index.load(dbname).get();
 
@@ -263,12 +339,8 @@ public class Main {
         System.out.println("Usage: ir-engine cluster-cbor-query index-name cborQueryFile");
     }
 
-    private static void dumpIndexDbUsage() {
-        System.out.println("Usage: ir-engine index-db vocabFile index-name cborParagraphs");
-    }
-
     static void usage() {
-        System.out.println("USage: ir-engine [vocab | create-empty-index | add-documents | calculate-vectors | cluster | cluster-cbor-query]\n" +
+        System.out.println("USage: ir-engine [vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query]\n" +
         "Run commands for specific usage instructions");
         //System.out.println("Usage: prog-4 [vocab | index | dump-index | query | cbor-query]\n" +
         //        "Run commands for specific usage instructions");

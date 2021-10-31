@@ -3,6 +3,7 @@ package com.TeamHotel.inverindex;
 import com.TeamHotel.main.WordSimilarity;
 import com.TeamHotel.preprocessor.Preprocess;
 
+import org.apache.commons.lang3.Validate;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
 import org.jetbrains.annotations.NotNull;
@@ -121,7 +122,7 @@ public class Index implements Serializable{
             s.close();
         } catch (SQLException ex) {
             //ex.printStackTrace();
-            System.err.println("INDEX table does not exist");
+            System.err.println("DOCUMENTS table does not exist");
         }
         try {
             PreparedStatement s = connection.prepareStatement("DROP TABLE POSTINGS");
@@ -156,7 +157,7 @@ public class Index implements Serializable{
             "FAKE INT NOT NULL)");
         s.executeUpdate();
         s.close();
-        System.err.println("Created table INDEX");;
+        System.err.println("Created table DOCUMENTS");;
     }
 
     public void beginTransaction() {
@@ -198,19 +199,24 @@ public class Index implements Serializable{
     public void addNewDocument(@NotNull final String docID, @NotNull final String fulltext, @NotNull final List<String> tokenizedText,
     @NotNull final TreeMap<String, Integer> tokenSet) {
         try {
-            PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.INSERT_DOCUMENT));
+            @NotNull final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.INSERT_DOCUMENT));
             s.setInt(1, nextId.getAndIncrement());
             s.setString(2, docID);
             s.setString(3, fulltext);
-            final StringBuilder tokenString = new StringBuilder(tokenizedText.get(0));
+            @NotNull final StringBuilder tokenString = new StringBuilder(tokenizedText.get(0));
             tokenizedText.listIterator(1).forEachRemaining(t -> tokenString.append(",").append(t));
             s.setString(4, tokenString.toString());
-            final StringBuilder uniqueTokens = new StringBuilder();
-            tokenSet.forEach((t, tf) -> uniqueTokens.append(",").append(t).append(":").append(tf));
-            if (uniqueTokens.length() > 0) {
-                uniqueTokens.subSequence(1, uniqueTokens.length());
+            final Map.Entry<String, Integer> first = tokenSet.firstEntry();
+            if (first != null) {
+                @NotNull final StringBuilder uniqueTokens = new StringBuilder(String.format("%s:%d", first.getKey(), first.getValue()));
+                if (tokenSet.size() > 1) {
+                    tokenSet.tailMap(tokenSet.higherKey(first.getKey())).forEach((t, tf) -> uniqueTokens.append(String.format(",%s:%d", t, tf)));
+                }
+                s.setString(5, uniqueTokens.toString());
+            } else {
+                s.close();
+                return;
             }
-            s.setString(5, uniqueTokens.toString());
             if (0 == s.executeUpdate()) {
                 System.err.println("Failed to insert " + docID + " into database");
             }
@@ -227,9 +233,13 @@ public class Index implements Serializable{
      * This is necessary because indexing will take far too long if we consider all words.
      */
     public int addNewDocuments(@NotNull final String cborParagraphs, @NotNull final Set<String> vocab, int offset, int max) {
-        return Preprocess.processParagraphs(cborParagraphs, (id, text, tokenized, tokens) -> {
+        beginTransaction();
+        nextId.set(offset);
+        int numAdded = Preprocess.processParagraphs(cborParagraphs, (id, text, tokenized, tokens) -> {
             addNewDocument(id, text, tokenized, tokens);
         }, vocab, offset, max);
+        commitTransaction();
+        return numAdded;
     }
 
     /**
