@@ -100,15 +100,17 @@ public class Main {
                     final String outfile = args[2];
                     final Map<String, List<List<String>>> queries = Preprocess.preprocessFacetedQueries(cborQueryFile);
                     final Set<String> vocab = Preprocess.getFacetedQueryVocabulary(queries);
+                    System.err.printf("Determined vocabulary contains %d terms\n", vocab.size());
                     try {
                         final FileWriter outf = new FileWriter(outfile);
-                        vocab.forEach(w -> {
+                        vocab.stream().sorted().forEach(w -> {
                             try {
                                 outf.write(String.format("%s\n", w));
                             } catch (IOException ex) {
                                 ex.printStackTrace();
                             }
                         });
+                        outf.close();
                     } catch (IOException ex) {
                         ex.printStackTrace();
                         System.err.println("Failed to write vocab to file");
@@ -340,7 +342,7 @@ public class Main {
     }
 
     static void usage() {
-        System.out.println("USage: ir-engine [vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query]\n" +
+        System.out.println("USage: ir-engine [query-vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query]\n" +
         "Run commands for specific usage instructions");
         //System.out.println("Usage: prog-4 [vocab | index | dump-index | query | cbor-query]\n" +
         //        "Run commands for specific usage instructions");

@@ -3,6 +3,7 @@ package com.TeamHotel.preprocessor;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 import java.io.FileInputStream;
@@ -440,11 +441,55 @@ public class Preprocess {
         return vocab;
     }
 
-    public static Map<String, List<List<String>>> preprocessFacetedQueries(String cborQueryFile) {
-        return null;
+    @NotNull
+    public static Map<String, List<List<String>>> preprocessFacetedQueries(@NotNull final String cborOutlinesFile) {
+        Map<String, List<List<String>>> queries = new HashMap<>();
+        try {
+            final FileInputStream queryStream  = new FileInputStream(cborOutlinesFile);
+            for (final Data.Page query : DeserializeData.iterableAnnotations(queryStream)) {
+                final List<List<String>> facets = new LinkedList<>();
+                final String queryId = query.getPageId();
+                for (List<Data.Section> sections: query.flatSectionPaths()) {
+                    List<String> facet = new LinkedList<>();
+                    facet.addAll(Arrays.asList(query.getPageName().split("\\s+")));
+                    sections.forEach(s -> facet.addAll(Arrays.asList(s.getHeading().split("\\s+"))));
+                    facets.add(facet);
+                }
+                queries.put(queryId, facets);
+            }
+        } catch(Exception ex) {   
+            ex.printStackTrace(System.err);
+        }
+
+        return preprocessList(queries);
     }
 
-    public static Set<String> getFacetedQueryVocabulary(Map<String, List<List<String>>> queries) {
-        return null;
+    private static Map<String, List<List<String>>> preprocessList(@NotNull final Map<String, List<List<String>>> facetedQueries) {
+        final Set<String> stopWords = loadStopWords();
+        final SnowballStemmer stemmer = new porterStemmer();
+        Map<String, List<List<String>>> preprocessedQueries = new HashMap<>(facetedQueries.size() * 2);
+
+        facetedQueries.forEach((qid, facets) -> {
+            final List<List<String>> queryFacets = facets.stream().map((List<String> facet) -> 
+                facet.stream().flatMap(s -> Arrays.stream(s.toLowerCase().replaceAll("\\p{Punct}|\\d|\\p{Cntrl}", " ").split("\\s+")))
+                .filter(w -> !stopWords.contains(w))
+                .map(w -> {
+                    stemmer.setCurrent(w);
+                    stemmer.stem();
+                    return stemmer.getCurrent();
+                })
+                .filter(t -> (t.length() > _minTokenSize)).collect(Collectors.toList()))
+                .collect(Collectors.toList());
+            preprocessedQueries.put(qid, queryFacets);
+        });
+
+        return preprocessedQueries;
+    }
+
+    public static Set<String> getFacetedQueryVocabulary(Map<String, List<List<String>>> facetedQueries) {
+        return facetedQueries.values().stream().flatMap(facets -> 
+        facets.stream().flatMap(facet -> 
+        facet.stream()))
+        .collect(Collectors.toSet());
     }
 }
