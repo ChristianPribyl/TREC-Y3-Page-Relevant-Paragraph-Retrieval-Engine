@@ -3,7 +3,9 @@ package com.TeamHotel.main;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -54,46 +57,6 @@ public class Main {
                 }
                 Preprocess.printVocabulary(vocabulary);
                 break;
-            case "index": {
-                if (args.length == 4) {
-                    // args[1]: vocab
-                    // args[2]: cborParagraphs
-                    // args[3]: index save location
-                    final InvertedIndex invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 0, 100000000);
-                    InvertedIndex.saveIndex(invertedIndex, args[3]);
-                                        /*
-                    new java.io.File(args[3]).mkdir();
-                    InvertedIndex invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 0, 4000000);
-                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/1.dat");
-                    
-                    // The inverted index takes a lot of space.  We want the garbage collector to free 
-                    // the previous one before we start creating another.  Java can't discard it until all
-                    // references are removed.
-                    invertedIndex = null;
-                    System.gc(); 
-
-                    invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 4000000, 4000000);
-                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/2.dat");
-                    invertedIndex = null;
-                    System.gc();
-                    invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 8000000, 4000000);
-                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/3.dat");
-                    invertedIndex = null;
-                    System.gc();
-                    invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 12000000, 4000000);
-                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/4.dat");
-                    invertedIndex = null;
-                    System.gc();
-                    invertedIndex = InvertedIndex.createInvertedIndex(args[1], args[2], 16000000, 4000000);
-                    InvertedIndex.saveIndex(invertedIndex, args[3] + "/5.dat");
-                    invertedIndex = null;
-                    System.gc();
-                    */
-                } else {
-                    indexUsage();
-                }
-                break;
-            }
             case "query-vocab": {
                 if (args.length == 3) {
                     final String cborQueryFile = args[1];
@@ -164,6 +127,39 @@ public class Main {
                 }
                 break;
             }
+            case "make-postings": {
+                if (args.length == 5) {
+                    final String dbname = args[1];
+                    final String vocabFile = args[2];
+                    final int offset = Integer.parseInt(args[3]);
+                    final int maxDocuments = Integer.parseInt(args[4]);
+                    //final int maxLength = Integer.parseInt(args[3]);
+                    System.out.println("Loading vocab");
+                    final List<String> vocab = Preprocess.loadVocab(vocabFile);
+                    System.err.println("Instantiating Index");
+                    Index idx = Index.load(dbname).get();
+                    System.err.println("Generating postings lists");
+                    InvertedIndex.generatePostings(idx, vocab, offset, maxDocuments);
+                } else {
+                    System.out.println("Usage: ir-engine make-postings <index> <vocab-file> <offset> <max-documents-to-parse>");
+                }
+                break;
+            }
+            case "reset-postings": {
+                if (args.length == 3) {
+                    final String dbname = args[1];
+                    final String vocabFile = args[2];
+                    System.out.println("Loading vocab");
+                    final List<String> vocab = Preprocess.loadVocab(vocabFile);
+                    System.err.println("Instantiating Index");
+                    Index idx = Index.load(dbname).get();
+                    idx.deletePostings();
+                    idx.addEmptyPostings(vocab);
+                } else {
+                    System.out.println("Usage: ir-engine reset-postings <index> <vocab-file>");
+                }
+                break;
+            }
             case "create-empty-index": {
                 if (args.length == 2) {
                     final String dbname = args[1];
@@ -230,31 +226,6 @@ public class Main {
                 }
                 break;
             }
-            case "dump-index":
-                if (args.length == 2) {
-                    // args[1] inverted index
-                    InvertedIndex.printIndex(Objects.requireNonNull(InvertedIndex.loadInvertedIndex(args[1])));
-                } else {
-                    dumpIndexUsage();
-                }
-                break;
-            case "query":
-                /* performs merge query of inverted index
-                 * 	will prompt user to  choose whether to do an 'AND' or 'OR' merge query
-                 * 	OR merge query will be implemented later
-                 *
-                 * args[1] inverted index
-                 * args[2] AND | OR (merge type)
-                 * args[3] tfidf variant (ddd.qqq)
-                 */
-                if (args.length == 4) {
-                    InvertedIndex index = Objects.requireNonNull(InvertedIndex.loadInvertedIndex(args[1]));
-                    Scanner query_input = new Scanner(System.in);
-                    while (Merge_Queries.merge_inverted_index(index, args[2], args[3], query_input));
-                } else {
-                    queryUsage();
-                }
-                break;
             case "cbor-query": {
                 if (args.length == 5) {
                     final String invertedIndexFile = args[1];
@@ -264,7 +235,7 @@ public class Main {
                     final String tfidfVariant = args[4];
                     // preprocess cbor queries.
                     // execute queries in sequence.
-                    final InvertedIndex invertedIndex = InvertedIndex.loadInvertedIndex(invertedIndexFile);
+                    final InvertedIndex invertedIndex = null;//InvertedIndex.loadInvertedIndex(invertedIndexFile);
                     assert invertedIndex != null;
                     final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile, Preprocess.QueryType.PAGES);
                     StringBuilder out = new StringBuilder();
@@ -272,7 +243,7 @@ public class Main {
                         System.out.println((String.format("Processing query %s\n", id)));
                         terms.forEach((term, num) -> System.out.printf("%s ", term));
                         System.out.println();
-                        Merge_Queries.query(invertedIndex, terms, mergeType, tfidfVariant).forEach(r -> out.append(String.format("%s Q0 %s\n", id, r)));
+                        //Merge_Queries.query(invertedIndex, terms, mergeType, tfidfVariant).forEach(r -> out.append(String.format("%s Q0 %s\n", id, r)));
                         // $queryId Q0 $paragraphId $rank $score $teamName-$methodName
                     });
                     try {
@@ -332,6 +303,87 @@ public class Main {
                 }
                 break;
             }
+            case "tfidf-cbor-query": {
+                if (args.length == 5) {
+                    final String dbname = args[1];
+                    final String cborQueryFile = args[2];
+                    //final String mergeType = args[3].toUpperCase();
+                    //assert (mergeType.equals("AND") || mergeType.equals("OR"));
+                    final String tfidfVariant = args[4];
+                    // preprocess cbor queries.
+                    // execute queries in sequence.
+                    final Index idx = Index.load(dbname).get();
+                    final Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
+
+                    FileWriter logfile = new FileWriter("../queryLog.txt");
+                    FileWriter runFile = new FileWriter("../tfidf-atc_btc-TeamHotel.run");
+
+                    Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
+
+                    Map<String, List<List<String>>> lessQueries = new HashMap<>(5);
+                    facetedQueries.entrySet().stream().collect(Collectors.toList()).subList(0, 1).forEach(e -> lessQueries.put(e.getKey(), e.getValue()));
+                    lessQueries.forEach((queryId, facets) -> {
+                        queryResults.put(queryId, new ArrayList<>(facets.size()));
+                        facets.forEach(facet -> {
+                            Map<String, Integer> terms = new HashMap<>();
+                            facet.stream().forEach((String t) -> {
+                                Integer prev = terms.put(t, 1);
+                                if (prev != null) {
+                                    terms.put(t, prev + 1);
+                                }
+                            });
+                            try {
+                                logfile.write(String.format("Querying Facet of %s with terms: ", queryId));
+                                facet.forEach(w -> {
+                                    try {
+                                        logfile.write(String.format(" %s", w));
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                });
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                            System.out.println();
+                            List<Pair<String, Double>> facetResults = Merge_Queries.query(idx, terms, "OR", tfidfVariant, logfile);
+                            queryResults.get(queryId).add(facetResults);
+                            System.out.printf("Facet has %d documents\n", facetResults.size());
+                            System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
+                        });
+                    });
+
+                    final String modelName = "tfidf_atc.btc";
+                    final String teamName = "TeamHotel";
+
+                    Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
+                    queryResults.forEach((qid, facets) -> {
+                        System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                        List<Pair<String, Double>> result = Merge_Queries.mergeFacets(facets);
+                        System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                        finalResults.put(qid, result);
+                    });
+
+                    System.err.printf("Final results contains results for %d queries\n", finalResults.size());
+
+                    AtomicInteger i = new AtomicInteger(1);
+                    finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
+                        results.forEach((Pair<String, Double> p) -> {
+                            final String docid = p.getLeft();
+                            final Double score = p.getRight();
+                            try {
+                                runFile.write(String.format("%s Q0 %s %d %f %s-%s\n", qid, docid, i.getAndIncrement(), score, teamName, modelName));
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
+                            //$queryId Q0 $paragraphId $rank $score $teamName-$methodName
+                        });
+                    });
+                    runFile.close();
+                } else {
+                    cborQueryUsage();
+                }
+                break;
+            }
             default:
                 usage();
         }
@@ -342,7 +394,7 @@ public class Main {
     }
 
     static void usage() {
-        System.out.println("USage: ir-engine [query-vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query]\n" +
+        System.out.println("USage: ir-engine [query-vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query | make-postings | reset-postings]\n" +
         "Run commands for specific usage instructions");
         //System.out.println("Usage: prog-4 [vocab | index | dump-index | query | cbor-query]\n" +
         //        "Run commands for specific usage instructions");

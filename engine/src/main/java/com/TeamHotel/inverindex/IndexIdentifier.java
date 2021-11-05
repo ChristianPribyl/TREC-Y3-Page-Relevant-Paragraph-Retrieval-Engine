@@ -37,6 +37,27 @@ public class IndexIdentifier implements Serializable, Comparable<IndexIdentifier
 
     @Override
     public int compareTo(IndexIdentifier o) {
+        int result;
+        int idComp = o.trecId.compareTo(trecId);
+        int tfComp = Integer.compare(o.termFrequency, termFrequency);
+        // if they share an id they are equal
+        if (idComp == 0) {
+            result = idComp;
+        // else rank then by term frequency
+        } else if (tfComp != 0) {
+            result = tfComp;
+        // compare their ids as a tiebreaker
+        } else {
+            result = idComp;
+        }
+        //System.out.printf("Comparing (%s/%d and %s/%d resulted in %d\n", trecId, termFrequency, o.trecId, o.termFrequency, result);
+        return result;
+    }
+
+    /*
+    @Override
+    public int compareTo(IndexIdentifier o) {
         return o.trecId.compareTo(trecId);
     }
+    */
 }

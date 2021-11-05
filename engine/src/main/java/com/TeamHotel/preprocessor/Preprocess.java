@@ -3,7 +3,6 @@ package com.TeamHotel.preprocessor;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 import java.io.FileInputStream;
@@ -389,9 +388,8 @@ public class Preprocess {
         for (int i = 0; i < numThreads; i++) {
             try {
                 threads[i].join();
-            } catch (InterruptedException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
+            } catch (InterruptedException ex) {
+                ex.printStackTrace();
             }
         }
         return numProcessed.getPlain();

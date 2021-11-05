@@ -11,26 +11,34 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 
 public class Index implements Serializable{
     private final Connection connection;
     private static final Map<QUERY, String> queryStrings;
+    private boolean in_transaction = false;
+    private AtomicInteger nextId = new AtomicInteger();
+    private AtomicInteger nextPostingsId = new AtomicInteger();
     static {
         queryStrings = new HashMap<>();
-        queryStrings.put(QUERY.INSERT_POSTINGS,                 "INSERT INTO POSTINGS VALUES (?, ?, ?, ?)");
+        queryStrings.put(QUERY.INSERT_POSTINGS,                 "INSERT INTO POSTINGS VALUES (?, ?, 0, '')");
         queryStrings.put(QUERY.INSERT_DOCUMENT,                 "INSERT INTO DOCUMENTS VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, 0)");
         queryStrings.put(QUERY.INSERT_FAKE_LEADER,              "INSERT INTO DOCUMENTS VALUES (?, NULL, NULL, NULL, NULL, ?, ?, 1, 1)");
+        queryStrings.put(QUERY.UPDATE_POSTINGS,                 "UPDATE POSTINGS SET (DOC_FREQUENCY, POSTINGS_LIST) = (?, ?) WHERE TERM = ?");
         queryStrings.put(QUERY.UPDATE_DOCUMENT_VECTOR,          "UPDATE DOCUMENTS SET VECTOR=? WHERE DOCID=?");
         queryStrings.put(QUERY.UPDATE_DOCUMENT_CLASS,           "UPDATE DOCUMENTS SET CLASS=? WHERE DOCID=?");
         queryStrings.put(QUERY.UNSET_LEADERS,                   "UPDATE DOCUMENTS SET LEADER=0 WHERE LEADER=1");
         queryStrings.put(QUERY.DELETE_EXTRA_FAKES,              "DELETE FROM DOCUMENTS WHERE (FAKE=1 AND LEADER=0)");
+        queryStrings.put(QUERY.DELETE_POSTINGS,                 "DELETE FROM POSTINGS");
         queryStrings.put(QUERY.SELECT_VECTOR_BY_INDEX,          "SELECT DOCID, VECTOR FROM DOCUMENTS WHERE (ID=?) AND (FAKE=0)");
         queryStrings.put(QUERY.SELECT_POSTINGS,                 "SELECT POSTINGS_LIST FROM POSTINGS WHERE TERM = ?");
         queryStrings.put(QUERY.SELECT_DOCUMENT_VECTOR_BY_CLASS, "SELECT DOCID, VECTOR FROM DOCUMENTS WHERE (CLASS=?) AND (FAKE=0)");
@@ -40,14 +48,12 @@ public class Index implements Serializable{
         queryStrings.put(QUERY.COUNT_DOCUMENTS,                 "SELECT COUNT(*) FROM DOCUMENTS");
         queryStrings.put(QUERY.SELECT_ALL_DOCID_VECTOR_CLUSTER, "SELECT DOCID, VECTOR, CLASS FROM DOCUMENTS WHERE (FAKE=0) AND (ID >= ?) AND (ID < ?)");
         queryStrings.put(QUERY.SELECT_TOKENIZED_DOCUMENTS,      "SELECT DOCID, PREPROCESSED_TEXT FROM DOCUMENTS WHERE (FAKE=0) AND (ID >= ?) AND (ID < ?)");
+        queryStrings.put(QUERY.SELECT_ALL_DOC_TF,               "SELECT DOCID, TOKEN_SET FROM DOCUMENTS WHERE (FAKE=0) AND (ID >= ?) AND (ID < ?)");
     }
     enum QUERY { INSERT_POSTINGS, SELECT_POSTINGS, INSERT_DOCUMENT, UPDATE_DOCUMENT_VECTOR, UPDATE_DOCUMENT_CLASS,
     INSERT_FAKE_LEADER, SELECT_DOCUMENT_VECTOR_BY_CLASS, SELECT_LEADER_VECTORS, SELECT_DOCUMENT_FULLTEXT, DELETE_EXTRA_FAKES,
-    UNSET_LEADERS, SELECT_VECTOR_BY_INDEX, COUNT_DOCUMENTS, SELECT_CLUSTERS, SELECT_ALL_DOCID_VECTOR_CLUSTER, SELECT_TOKENIZED_DOCUMENTS}
-
-    private boolean in_transaction = false;
-    private AtomicInteger nextId = new AtomicInteger();
-
+    UNSET_LEADERS, SELECT_VECTOR_BY_INDEX, COUNT_DOCUMENTS, SELECT_CLUSTERS, SELECT_ALL_DOCID_VECTOR_CLUSTER, SELECT_TOKENIZED_DOCUMENTS,
+    SELECT_ALL_DOC_TF, UPDATE_POSTINGS, DELETE_POSTINGS }
 
 
     /**
@@ -137,8 +143,8 @@ public class Index implements Serializable{
         "CREATE TABLE POSTINGS " +
         "(ID             INT NOT NULL," +
         " TERM           TEXT PRIMARY KEY NOT NULL, " +
-        " DOC_FREQUENCY  INT     NOT NULL, " +
-        " POSTINGS_LIST  BINARY  NOT NULL" + 
+        " DOC_FREQUENCY  INT NOT NULL, " +
+        " POSTINGS_LIST  TEXT NOT NULL" + 
         ")");
         s.executeUpdate();
         s.close();
@@ -271,7 +277,9 @@ public class Index implements Serializable{
             s.setString(1, documentID);
             ResultSet result = s.executeQuery();
             if (result.next()) {
-                return Optional.of(result.getString("FULL_TEXT"));
+                final String str = result.getString("FULL_TEXT");
+                s.close();
+                return Optional.of(str);
             }
         } catch (SQLException ex) {
             ex.printStackTrace();
@@ -298,8 +306,10 @@ public class Index implements Serializable{
                 final Scanner vectorScanner = new Scanner(result.getString("VECTOR"));
                 final ArrayList<Double> vector = new ArrayList<>(300);
                 vectorScanner.forEachRemaining((String d) -> vector.add(Double.parseDouble(d)));
+                s.close();
                 return Optional.of(Pair.of(id, vector));
             }
+            s.close();
         } catch (SQLException ex) {
             ex.printStackTrace();
         } catch (NumberFormatException ex) {
@@ -355,6 +365,7 @@ public class Index implements Serializable{
             s.setInt(2, clusterId);
             s.setString(3, vectorString.toString());
             if (s.executeUpdate() == 1) {
+                s.close();
                 return true;
             }
             throw new SQLException("Failed to add fake leader into documents");
@@ -394,6 +405,7 @@ public class Index implements Serializable{
                                             final int docClass = results.getInt("CLASS");
                                             final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
                                             curr = Pair.of(docClass, vec);
+                                            getNext = false;
                                             return true;
                                         }
                                     } catch (SQLException ex) {
@@ -401,13 +413,13 @@ public class Index implements Serializable{
                                     }
                                     more = false;
                                     curr = null;
-                                    getNext = false;
                                     try {
                                         results.close();
                                     } catch (SQLException ex) {
                                         ex.printStackTrace();
                                     }
                                 }
+                                getNext = false;
                                 return false;
                             }
 
@@ -606,6 +618,7 @@ public class Index implements Serializable{
                                             final int classId = results.getInt("CLASS");
                                             final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
                                             curr = Triple.of(docId, classId, vec);
+                                            getNext = false;
                                             return true;
                                         }
                                     } catch (SQLException ex) {
@@ -613,7 +626,6 @@ public class Index implements Serializable{
                                     }
 
                                     more = false;
-                                    getNext = false;
                                     curr = null;
                                     try {
                                         results.close();
@@ -621,6 +633,7 @@ public class Index implements Serializable{
                                         ex.printStackTrace();
                                     }
                                 }
+                                getNext = false;
                                 return false;
                             }
                             @Override
@@ -640,6 +653,69 @@ public class Index implements Serializable{
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
+        return Collections.emptyIterator();
+    }
+
+    public Iterator<Pair<String, Map<String, Integer>>> getDocumentTermFrequencies(final int minIdx, final int maxDocuments) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_ALL_DOC_TF));
+            s.setInt(1, minIdx);
+            s.setInt(2, minIdx + maxDocuments);
+            ResultSet results = s.executeQuery();
+            if (results.next()) {
+                class AllTfIterator implements Iterable<Pair<String, Map<String, Integer>>> {
+                    boolean more = true;
+                    boolean getNext = true;
+                    Pair<String, Map<String, Integer>> curr = null;
+                    @Override
+                    public Iterator<Pair<String, Map<String, Integer>>> iterator() {
+                        return new Iterator<Pair<String, Map<String, Integer>>>() {
+                            @Override
+                            public boolean hasNext() {
+                                if (more) {
+                                    try {
+                                        if (!getNext) {
+                                            return curr != null;
+                                        } else if (results.next()) {
+                                            @NotNull final String docId = results.getString("DOCID");
+                                            final Map<String, Integer> tfs = parseTermMap(results.getString("TOKEN_SET"));
+                                            curr = Pair.of(docId, tfs);
+                                            getNext = false;
+                                            return true;
+                                        }
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+
+                                    more = false;
+                                    curr = null;
+                                    try {
+                                        results.close();
+                                    } catch (SQLException ex) {
+                                        ex.printStackTrace();
+                                    }
+                                }
+                                getNext = false;
+                                return false;
+                            }
+                            @Override
+                            public Pair<String, Map<String, Integer>> next() {
+                                if (hasNext()) {
+                                    getNext = true;
+                                    return curr;
+                                }
+                                more = false;
+                                throw new NoSuchElementException();
+                            }   
+                        };
+                    }
+                }
+                return new AllTfIterator().iterator();
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        System.out.println("Returning empty iterator");
         return Collections.emptyIterator();
     }
 
@@ -707,7 +783,7 @@ public class Index implements Serializable{
                                         } else if (results.next()) {
                                             getNext = false;
                                             @NotNull final String docId = results.getString("DOCID");
-                                            @NotNull final Map<String, Integer> terms = parseTermMap(results.getString("PREPROCESSED_TEXT"));
+                                            @NotNull final Map<String, Integer> terms = parseTermMapFromTokenizedText(results.getString("PREPROCESSED_TEXT"));
                                             curr = Pair.of(docId, terms);
                                             return true;
                                         }
@@ -716,13 +792,13 @@ public class Index implements Serializable{
                                     }
                                     more = false;
                                     curr = null;
-                                    getNext = false;
                                     try {
                                         results.close();
                                     } catch (SQLException ex) {
                                         ex.printStackTrace();
                                     }
                                 }
+                                getNext = false;
                                 return false;
                             }
 
@@ -770,6 +846,101 @@ public class Index implements Serializable{
         return affectedRows;
     }
 
+    public boolean updatePostingsList(@NotNull final String term, @NotNull final ArrayList<Pair<String, Integer>> postingsList, final int maxSize) {
+        try {
+            // combine old postings and new postings
+            PostingsList oldPostings = getPostingsList(term, new TreeMap<>()).get();
+            //postingsList.forEach((Pair<String, Integer> p) -> oldPostings.add(new IndexIdentifier(p.getRight(), p.getLeft()), null));
+
+            // convert the list to Pair<String, Integer> for storage in database
+            Iterator<Pair<IndexIdentifier, IndexDocument>> it = oldPostings.iterator();
+
+            // create combined list of all documents
+            final List<Pair<String, Integer>> postings = new ArrayList<>(maxSize * 2);
+            it.forEachRemaining(p -> postings.add(Pair.of(p.getLeft().trecId, p.getLeft().termFrequency)));
+            postings.addAll(postingsList);
+
+            // sort descending by term frequency
+            postings.sort((Pair<String, Integer> l, Pair<String, Integer> r) -> -Integer.compare(l.getRight(), r.getRight()));
+            // filter duplicates
+            List<Pair<String, Integer>> updatedPostings = postings.stream().distinct().collect(Collectors.toList());
+            // truncate maxSize most occurring matches.  It would be better to consider document length as well,
+            // I expect a large maxSize (10000)+ should be enough that we never need the tail of the list anyway.
+            updatedPostings = updatedPostings.subList(0, Math.min(maxSize, updatedPostings.size()));
+
+            @NotNull final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.UPDATE_POSTINGS));
+            s.setInt(1, updatedPostings.size());
+            final StringBuilder postingsStr = new StringBuilder(String.format("%s:%d", updatedPostings.get(0).getLeft(), updatedPostings.get(0).getRight()));
+            updatedPostings.subList(0, updatedPostings.size()).forEach(p -> postingsStr.append(String.format(",%s:%d", p.getLeft(), p.getRight())));
+            s.setString(2, postingsStr.toString());
+            s.setString(3, term);
+            return s.executeUpdate() == 1;
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        } catch (NoSuchElementException ex) {
+            ex.printStackTrace();
+        }
+        return false;
+    }
+
+    public Optional<PostingsList> getPostingsList(@NotNull final String term, @NotNull final Map<String, IndexDocument> documents) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_POSTINGS));
+            s.setString(1, term);
+            ResultSet results = s.executeQuery();
+            if (results.next()) {
+                return Optional.of(PostingsList.fromString(term, results.getString("POSTINGS_LIST"), documents));
+            }
+        } catch (SQLException ex) {
+            ex.toString();
+        }
+        System.err.printf("No postings list found for %s\n", term);
+        return Optional.empty();
+    }
+
+    public Optional<PostingsList> getPostingsListForQuery(@NotNull final String term, @NotNull final Map<String, IndexDocument> documents) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_POSTINGS));
+            s.setString(1, term);
+            ResultSet results = s.executeQuery();
+            if (results.next()) {
+                String st = results.getString("POSTINGS_LIST");
+                PostingsList postings = PostingsList.fromString(term, st, documents);
+                postings.truncate(10000);
+                s.close();
+                return Optional.of(postings);
+            }
+        } catch (SQLException ex) {
+            ex.toString();
+        }
+        System.err.printf("No postings list found for %s\n", term);
+        return Optional.empty();
+    }
+
+    public void deletePostings() {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.DELETE_POSTINGS));
+            s.executeUpdate();
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    public void addEmptyPostings(List<String> vocab) {
+        vocab.forEach(word -> {
+            try {
+                final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.INSERT_POSTINGS));
+                s.setInt(1, nextPostingsId.getAndIncrement());
+                s.setString(2, word);
+                s.executeUpdate();
+                s.close();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
+        });
+    }
+
+
     @NotNull
     private final ArrayList<Double> parseVector(@NotNull final String vectorString) throws SQLException {
         @NotNull final ArrayList<Double> vec = new ArrayList<>(WordSimilarity.numDimensions);
@@ -806,7 +977,26 @@ public class Index implements Serializable{
 
     @NotNull
     private final Map<String, Integer> parseTermMap(@NotNull final String termString) throws SQLException {
-        return new HashMap<>();
+        final TreeMap<String, Integer> termFrequencies = new TreeMap<>();
+        Arrays.asList(termString.split(",")).stream().forEach(entryString -> {
+            final String[] parts = entryString.split(":");
+            final String term = parts[0];
+            final int tf = Integer.parseInt(parts[1]);
+            termFrequencies.put(term, tf);
+        });
+        return termFrequencies;
+    }
+
+    @NotNull
+    private final Map<String, Integer>parseTermMapFromTokenizedText(@NotNull final String tokenizedText) throws SQLException {
+        final TreeMap<String, Integer> termFrequencies = new TreeMap<>();
+        Arrays.asList(tokenizedText.split(",")).stream().forEach(term -> {
+            Integer occurrances = termFrequencies.putIfAbsent(term, 1);
+            if (occurrances != null) {
+                termFrequencies.put(term, occurrances + 1);
+            }
+        });
+        return termFrequencies;
     }
 }
 

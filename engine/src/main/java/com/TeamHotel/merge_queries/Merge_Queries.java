@@ -2,11 +2,18 @@ package com.TeamHotel.merge_queries;
 
 import com.TeamHotel.inverindex.*;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
-import java.lang.Math;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import com.TeamHotel.preprocessor.Preprocess;
+
+import org.apache.commons.lang3.concurrent.AtomicInitializer;
 import org.apache.commons.lang3.tuple.Pair;
+import org.jetbrains.annotations.NotNull;
 
 public class Merge_Queries {
 
@@ -39,7 +46,7 @@ public class Merge_Queries {
 				System.out.println("Query {" + queryString + "} resulted in Terms: " + Arrays.toString(queryTerms));
 				for (String term: queryTerms) {
 					final String processedTerm = Preprocess.preprocessWord(term);
-					final PostingsList postingsList = index.getPostingsList(processedTerm);
+					final PostingsList postingsList = null;//index.getPostingsList(processedTerm);
 					if (postingsList == null || postingsList.size() == 0) {
 						System.out.printf("Query term %s is not in the inverted index\n", term);
 						postingsLists.add(new PostingsList(term));
@@ -78,7 +85,7 @@ public class Merge_Queries {
 			final Collection<IndexDocument> ranking = Ranker.tfidf(tfidfVariant, originalPostings, matches, index.numDocuments());
 			System.out.printf("orig %d done %d\n", originalPostings.size(), postingsLists.size());
 
-			printResults(ranking);
+			//printResults(ranking);
 		} catch (NullPointerException e) {
 
 			e.printStackTrace();
@@ -90,16 +97,21 @@ public class Merge_Queries {
 
 	// invertIndex is a HashMap of postings lists.  Each postingsList is an ordered set where each element has an indexed document
 	// and meta-data for that document specific to that postings list (term-frequency / score)
-	public static List<String> query(final InvertedIndex index, final Map<String, Integer> queryTerms, final String mergeType, final String tfidfVariant) {
+	public static List<Pair<String, Double>> query(@NotNull final Index index, @NotNull final Map<String, Integer> queryTerms, @NotNull final String mergeType, @NotNull final String tfidfVariant, @NotNull final FileWriter logfile) {
 		TreeSet<PostingsList> postingsLists = new TreeSet<>((PostingsList l, PostingsList r) -> {
 			if (l.size() > r.size()) return 1;
 			else if (l.size() < r.size()) return -1;
 			else return l.term().compareTo(r.term());
 		});
+		Map<String, IndexDocument> documents = new TreeMap<>();
+		System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
 		queryTerms.forEach((term, num) -> {
-			PostingsList postings = index.getPostingsList(term);
-			if (postings != null) {
-				postingsLists.add(postings);
+			Optional<PostingsList> postings = index.getPostingsListForQuery(term, documents);
+			if (postings.isPresent()) {
+				System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
+				postingsLists.add(postings.get());
+			} else {
+				System.err.printf("Term %s has no postings\n", term);
 			}
 		});
 		final TreeSet<PostingsList> originalPostings = new TreeSet<>((PostingsList l, PostingsList r) -> {
@@ -109,25 +121,43 @@ public class Merge_Queries {
 		});
 		originalPostings.addAll(postingsLists);
 		List<IndexDocument> matches;
+		System.err.printf("Merging %d postings lists\n", originalPostings.size());
 		if (mergeType.equals("AND")) {
+			System.err.println("AND");
 			matches = merge_AND_query(postingsLists);
 		} else if (mergeType.equals("OR")) {
+			System.err.println("OR");
 			matches = merge_OR_query(postingsLists);
 		} else {
 			throw new IllegalArgumentException("mergeType must be \"AND\" or \"OR\"");
 		}
+		System.err.printf("The result contains %d documents\n", matches.size());
 
-		Collection<IndexDocument> rankings = Ranker.tfidf(tfidfVariant, originalPostings, matches, index.numDocuments());
+		//matches = matches.subList(0, Math.min(10000, matches.size()));
+		System.err.printf("And that gets truncated to %d documents\n", matches.size());
+
+		Collection<IndexDocument> rankings = Ranker.tfidf(tfidfVariant, originalPostings, matches, index.getNumDocuments());
 		assert(matches.size() == rankings.size());
-		System.out.println("Results (also saved to cbor run file):");
-		printResults(rankings);
-		ArrayList<String> results = new ArrayList<>();
+		//System.out.println("Results (also saved to cbor run file):");
+		//printResults(rankings);
+		ArrayList<Pair<String, Double>> results = new ArrayList<>();
 		int i = 1;
 		for (IndexDocument d : rankings) {
-			results.add(String.format("%s %d %f TeamHotel-%s", d.getFullId(), i, d.getFinalScore(), mergeType));
+			//results.add(String.format("%s %d %f TeamHotel-%s", d.getFullId(), i, d.getFinalScore(), mergeType));
+			results.add(Pair.of(d.getFullId(), d.getFinalScore()));
 			// $paragraphId $rank $score $teamName-$methodName
-			if (i == 20) break;
+			final Optional<String> fulltext = index.getFulltextById(d.getFullId());
+			if (fulltext.isPresent()) {
+				try {
+					logfile.write(String.format("\n%s: %f/%d: {%s}\n\n", d.getFullId(), d.getFinalScore(), i, fulltext.get()));
+				} catch (IOException ex) {
+					ex.printStackTrace();
+				}
+			} else {
+				System.out.println("Result without fulltext");
+			}
 			i++;
+			if (i == 21) break;
 		}
 		return results;
 	}
@@ -159,7 +189,9 @@ public class Merge_Queries {
 			return new ArrayList<>();
 		}
 
-		while( postingsLists.size() > 1 ) {
+		PostingsList result = new PostingsList("");
+		postingsLists.forEach(postings -> result.mergeWith(postings));
+		/*while( postingsLists.size() > 1 ) {
 			Iterator<PostingsList> it = postingsLists.iterator();
 			PostingsList smallest_query = it.next();
 			PostingsList second_smallest_query = it.next();
@@ -167,12 +199,14 @@ public class Merge_Queries {
 			postingsLists.remove(smallest_query);
 			postingsLists.remove(second_smallest_query);
 			//System.out.println("Merging lists of sizes: " + sorted_smallest.size() + " and " + sorted_second_smallest.size());
-			PostingsList result = a_OR_b(smallest_query, second_smallest_query);
+			//PostingsList result = a_OR_b(smallest_query, second_smallest_query);
 			//System.out.println("The result has a size of " + result.size());
-			postingsLists.add(result);
+			smallest_query.mergeWith(second_smallest_query);
+			postingsLists.add(smallest_query);
 		}
 		PostingsList result = postingsLists.iterator().next();
 		result.iterator().forEachRemaining(pair -> pair.getRight().updateRelevantPostings(result.term(), pair.getLeft()));
+		*/
 		return result.documents();
 	}
 
@@ -229,6 +263,7 @@ public class Merge_Queries {
 	}
 
 	private static PostingsList a_OR_b(PostingsList a, PostingsList b) {
+		System.err.printf("%d OR %d -> ", a.size(), b.size());
 		if (a.size() == 0 && b.size() == 0) {
 			return new PostingsList(a.term());
 		}
@@ -286,6 +321,7 @@ public class Merge_Queries {
 			}
 			advanced = false;
 		}
+		System.err.printf("%d\n", result.size());
 		return result;
 	}
 
@@ -299,5 +335,28 @@ public class Merge_Queries {
 				d.getFullId(),
 				//d.getFulltext().substring(0, Math.min(d.getFulltext().length(), 80))));
 				d.getFulltext()));
+	}
+
+	public static List<Pair<String, Double>> mergeFacets(List<List<Pair<String, Double>>> facets) {
+		System.err.printf("Merging %d facets\n", facets.size());
+		facets.forEach(l -> {
+			System.err.printf("Facet has %d results\n", l.size());
+		});
+		Set<Pair<String, Double>> results = new HashSet<>(40);
+	
+		boolean more = true;
+		int i = 0;
+		while (results.size() < 20 && more) {
+			more = false;
+			for (List<Pair<String, Double>> facet: facets) {
+				if (facet.size() > i) {
+					results.add(facet.get(i));
+					more = true;
+				}
+			}
+			i++;
+		}
+
+		return results.stream().collect(Collectors.toList());
 	}
 }
