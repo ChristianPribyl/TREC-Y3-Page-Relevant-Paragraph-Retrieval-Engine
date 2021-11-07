@@ -36,17 +36,25 @@ public class WordSimilarity {
         documentIterator.forEachRemaining(pair -> {
             final String docID = pair.getLeft();
             final Map<String, Integer> termFrequencies = pair.getRight();
-            System.out.println(docID);
+            System.out.printf("Calculating vector for document %s\n", docID);
             ArrayList<Double> docVector = new ArrayList<>(Collections.nCopies(numDimensions, 0.0));
             AtomicInteger counter = new AtomicInteger();
             ArrayList<Double> wordVector = new ArrayList<>(Collections.nCopies(numDimensions, 0.0));
-            termFrequencies.forEach((String term, Integer tf) -> {
+
+            int numVecs = 0;
+            for (Map.Entry<String, Integer> e: termFrequencies.entrySet()) {
+                String term = e.getKey();
+                Integer tf = e.getValue();
                 // get word vector from file
-                addVectors(wordVector,wordVectors.get(term));
+                ArrayList<Double> wordVec = wordVectors.get(term);
+                if (wordVec != null) {
+                    addVectors(wordVector,wordVectors.get(term));
+                    numVecs++;
+                }
                 //System.out.println(wordVectors.get(term));
                 counter.incrementAndGet();
-            
-            });
+
+            }
             int num = counter.intValue();
             averVectors(docVector,wordVector,num);
             // doc vector = average word 
@@ -71,7 +79,7 @@ public class WordSimilarity {
                     Double.parseDouble(d);
                     outfile.write(String.format(" %s", d));
                 }
-                outfile.write(" ");
+                outfile.write("\n");
                 numProcessed++;
                 if (numProcessed % 20000 == 0) {
                     System.err.printf("Processed %d word vectors\n", numProcessed);
@@ -86,9 +94,11 @@ public class WordSimilarity {
     }
 
     public static int wordVectorfile(String filename,HashMap<String, ArrayList<Double>> map) {
+        System.out.println("Loading word vectors");
         try {
             File myObj = new File(filename);
             Scanner myReader = new Scanner(myObj);
+            int numLoaded = 0;
             while (myReader.hasNextLine()) {
                 String data = myReader.nextLine();
                 String[] parts = data.split(" ");
@@ -101,6 +111,10 @@ public class WordSimilarity {
                     vector.add(Double.parseDouble(parts[i]));
                 }
                 map.put(word, vector);
+                numLoaded++;
+                if (numLoaded % 20000 == 0) {
+                    System.out.printf("Loaded %d word vectors\n", numLoaded);
+                }
             }
             myReader.close();
             } catch (FileNotFoundException e) {
@@ -108,6 +122,7 @@ public class WordSimilarity {
             e.printStackTrace();
 
         }
+        System.out.println("Finished loading word vectors");
         return 0;
     }
 

@@ -739,8 +739,8 @@ public class Index implements Serializable{
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.UPDATE_DOCUMENT_VECTOR));
             final String vecString = vectorString(docVector);
-            s.setString(1, docID);
-            s.setString(2, vecString);
+            s.setString(2, docID);
+            s.setString(1, vecString);
             int affectedRows = s.executeUpdate();
             s.close();
             if (affectedRows == 1) {
@@ -906,7 +906,7 @@ public class Index implements Serializable{
             if (results.next()) {
                 String st = results.getString("POSTINGS_LIST");
                 PostingsList postings = PostingsList.fromString(term, st, documents);
-                postings.truncate(10000);
+                postings.truncate(1000);
                 s.close();
                 return Optional.of(postings);
             }

@@ -320,9 +320,10 @@ public class Main {
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
 
-                    Map<String, List<List<String>>> lessQueries = new HashMap<>(5);
-                    facetedQueries.entrySet().stream().collect(Collectors.toList()).subList(0, 1).forEach(e -> lessQueries.put(e.getKey(), e.getValue()));
-                    lessQueries.forEach((queryId, facets) -> {
+                    //Map<String, List<List<String>>> lessQueries = new HashMap<>(5);
+                    //facetedQueries.entrySet().stream().collect(Collectors.toList()).subList(0, 1).forEach(e -> lessQueries.put(e.getKey(), e.getValue()));
+                    //lessQueries.forEach((queryId, facets) -> {
+                    facetedQueries.forEach((queryId, facets) -> {
                         queryResults.put(queryId, new ArrayList<>(facets.size()));
                         facets.forEach(facet -> {
                             Map<String, Integer> terms = new HashMap<>();
@@ -367,6 +368,7 @@ public class Main {
 
                     AtomicInteger i = new AtomicInteger(1);
                     finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
+                        i.set(1);
                         results.forEach((Pair<String, Double> p) -> {
                             final String docid = p.getLeft();
                             final Double score = p.getRight();
@@ -381,6 +383,15 @@ public class Main {
                     runFile.close();
                 } else {
                     cborQueryUsage();
+                }
+                break;
+            }
+            case "query-ids": {
+                if (args.length == 2) {
+                    final String queryFile = args[1];
+                    Preprocess.dumpQueryIds(queryFile);
+                } else {
+                    System.err.println("Usage: ir-engine <query-ids>");
                 }
                 break;
             }

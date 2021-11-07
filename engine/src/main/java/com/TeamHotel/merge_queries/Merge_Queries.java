@@ -133,7 +133,7 @@ public class Merge_Queries {
 		}
 		System.err.printf("The result contains %d documents\n", matches.size());
 
-		//matches = matches.subList(0, Math.min(10000, matches.size()));
+		//matches = matches.subList(0, Math.min(5000, matches.size()));
 		System.err.printf("And that gets truncated to %d documents\n", matches.size());
 
 		Collection<IndexDocument> rankings = Ranker.tfidf(tfidfVariant, originalPostings, matches, index.getNumDocuments());
@@ -342,21 +342,33 @@ public class Merge_Queries {
 		facets.forEach(l -> {
 			System.err.printf("Facet has %d results\n", l.size());
 		});
-		Set<Pair<String, Double>> results = new HashSet<>(40);
+		Map<String, Double> results = new TreeMap<>();
 	
 		boolean more = true;
 		int i = 0;
 		while (results.size() < 20 && more) {
 			more = false;
 			for (List<Pair<String, Double>> facet: facets) {
-				if (facet.size() > i) {
-					results.add(facet.get(i));
+				if (facet.size() > i && results.size() < 20) {
+					Pair<String, Double> result = facet.get(i);
+					results.put(result.getLeft(), result.getRight());
 					more = true;
 				}
 			}
 			i++;
 		}
 
-		return results.stream().collect(Collectors.toList());
+		List<Pair<String, Double>> res = results.entrySet().stream()
+		.map((Map.Entry<String, Double> e) -> Pair.of(e.getKey(), e.getValue()))
+		.sorted((Pair<String, Double> l, Pair<String, Double> r) -> Double.compare(l.getRight(), r.getRight()))
+		.collect(Collectors.toList());
+
+		if (res.get(0).getRight() > res.get(1).getRight()) {
+			return res;
+		} else {
+			System.err.println("Needed to reverse results");
+			Collections.reverse(res);
+			return res;
+		}
 	}
 }

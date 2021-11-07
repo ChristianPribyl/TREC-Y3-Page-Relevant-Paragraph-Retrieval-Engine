@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 
 import edu.unh.cs.treccar_v2.Data;
@@ -489,5 +490,13 @@ public class Preprocess {
         facets.stream().flatMap(facet -> 
         facet.stream()))
         .collect(Collectors.toSet());
+    }
+
+    public static void dumpQueryIds(String queryFile) throws FileNotFoundException {
+        final FileInputStream queryStream  = new FileInputStream(queryFile);
+        for (final Data.Page query : DeserializeData.iterableAnnotations(queryStream)) {
+            final String queryId = query.getPageId();
+            System.out.println(queryId);
+        }
     }
 }
