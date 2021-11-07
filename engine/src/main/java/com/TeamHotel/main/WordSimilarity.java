@@ -1,13 +1,18 @@
 package com.TeamHotel.main;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.TeamHotel.inverindex.Index;
 import com.TeamHotel.preprocessor.Preprocess;
@@ -22,27 +27,31 @@ public class WordSimilarity {
         // load word vectors.
         // Preprocess.preprocessWord(words) will stem each of the words.  It can return an empty string, in which case
         // we should ignore the word.
-
-
+        HashMap<String, ArrayList<Double>> wordVectors = new HashMap<String, ArrayList<Double>>();
+        wordVectorfile(wordVectorFile,wordVectors);
         Iterator<Pair<String, Map<String, Integer>>> documentIterator = idx.getTokenizedDocuments(offset, maxDocuments);
 
         idx.beginTransaction(); // this speeds up database operations
-
+        
         documentIterator.forEachRemaining(pair -> {
             final String docID = pair.getLeft();
             final Map<String, Integer> termFrequencies = pair.getRight();
-            
-            ArrayList<Double> docVector = new ArrayList<>(numDimensions);
+            System.out.println(docID);
+            ArrayList<Double> docVector = new ArrayList<>(Collections.nCopies(numDimensions, 0.0));
+            AtomicInteger counter = new AtomicInteger();
+            ArrayList<Double> wordVector = new ArrayList<>(Collections.nCopies(numDimensions, 0.0));
             termFrequencies.forEach((String term, Integer tf) -> {
-                ArrayList<Double> wordVector = new ArrayList<>(numDimensions);
                 // get word vector from file
-
+                addVectors(wordVector,wordVectors.get(term));
+                //System.out.println(wordVectors.get(term));
+                counter.incrementAndGet();
+            
             });
-
+            int num = counter.intValue();
+            averVectors(docVector,wordVector,num);
             // doc vector = average word 
-
             // print vector perhaps
-
+            //System.out.println(docVector.size());
             idx.setDocumentVector(docID, docVector);
         });
 
@@ -74,5 +83,61 @@ public class WordSimilarity {
             }
         }
         return numProcessed;
+    }
+
+    public static int wordVectorfile(String filename,HashMap<String, ArrayList<Double>> map) {
+        try {
+            File myObj = new File(filename);
+            Scanner myReader = new Scanner(myObj);
+            while (myReader.hasNextLine()) {
+                String data = myReader.nextLine();
+                String[] parts = data.split(" ");
+                ArrayList<Double> vector = new ArrayList<>();
+                String word = parts[0];
+                //System.out.println(word);
+        
+                for(int i = 1;i < parts.length; i++)
+                {
+                    vector.add(Double.parseDouble(parts[i]));
+                }
+                map.put(word, vector);
+            }
+            myReader.close();
+            } catch (FileNotFoundException e) {
+            System.out.println("An error occurred.");
+            e.printStackTrace();
+
+        }
+        return 0;
+    }
+
+    public static boolean isNumeric(String strNum) {
+        if (strNum == null) {
+            return false;
+        }
+        try {
+            double d = Double.parseDouble(strNum);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        return true;
+    }
+
+    public static int addVectors(ArrayList<Double> vector1, ArrayList<Double> vector2) {
+        for (int i = 0; i < vector1.size();i++){
+            vector1.set(i, vector2.get(i) + vector1.get(i));
+            //System.out.println(vector1.get(i));
+        }
+        //System.out.println(vector1);
+    
+        return 0;
+    }
+
+    public static int averVectors(ArrayList<Double> doc, ArrayList<Double> vector, int count) {
+        System.out.println(count);
+        for (int i = 0; i < doc.size();i++){
+            doc.set(i, vector.get(i) / count);
+        }
+        return 0;
     }
 }
