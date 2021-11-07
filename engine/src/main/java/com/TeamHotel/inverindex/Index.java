@@ -387,57 +387,55 @@ public class Index implements Serializable{
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_LEADER_VECTORS));
             ResultSet results = s.executeQuery();
-            if (results.next()) {
-                class LeaderIterator implements Iterable<Pair<Integer, ArrayList<Double>>> {
-                    boolean more = true;
-                    boolean getNext = true;
-                    Pair<Integer, ArrayList<Double>> curr = null;
-                    @Override
-                    public Iterator<Pair<Integer, ArrayList<Double>>> iterator() {
-                        return new Iterator<Pair<Integer,ArrayList<Double>>>() {
-                            @Override
-                            public boolean hasNext() {
-                                if (more) {
-                                    try {
-                                        if (!getNext) {
-                                            return curr != null;
-                                        } else if (results.next()) {
-                                            final int docClass = results.getInt("CLASS");
-                                            final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
-                                            curr = Pair.of(docClass, vec);
-                                            getNext = false;
-                                            return true;
-                                        }
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
+            class LeaderIterator implements Iterable<Pair<Integer, ArrayList<Double>>> {
+                boolean more = true;
+                boolean getNext = true;
+                Pair<Integer, ArrayList<Double>> curr = null;
+                @Override
+                public Iterator<Pair<Integer, ArrayList<Double>>> iterator() {
+                    return new Iterator<Pair<Integer,ArrayList<Double>>>() {
+                        @Override
+                        public boolean hasNext() {
+                            if (more) {
+                                try {
+                                    if (!getNext) {
+                                        return curr != null;
+                                    } else if (results.next()) {
+                                        final int docClass = results.getInt("CLASS");
+                                        final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
+                                        curr = Pair.of(docClass, vec);
+                                        getNext = false;
+                                        return true;
                                     }
-                                    more = false;
-                                    curr = null;
-                                    try {
-                                        results.close();
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
-                                    }
-                                }
-                                getNext = false;
-                                return false;
-                            }
-
-                            @Override
-                            @NotNull
-                            public Pair<Integer, ArrayList<Double>> next() throws NoSuchElementException {
-                                if (hasNext()) {
-                                    getNext = true;
-                                    return curr;
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
                                 }
                                 more = false;
-                                throw new NoSuchElementException();
+                                curr = null;
+                                try {
+                                    results.close();
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
                             }
-                        };
-                    }
+                            getNext = false;
+                            return false;
+                        }
+
+                        @Override
+                        @NotNull
+                        public Pair<Integer, ArrayList<Double>> next() throws NoSuchElementException {
+                            if (hasNext()) {
+                                getNext = true;
+                                return curr;
+                            }
+                            more = false;
+                            throw new NoSuchElementException();
+                        }
+                    };
                 }
-                return new LeaderIterator().iterator();
             }
+            return new LeaderIterator().iterator();
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
@@ -455,56 +453,54 @@ public class Index implements Serializable{
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_CLUSTERS));
             ResultSet results = s.executeQuery();
-            if (results.next()) {
-                class ClusterIterator implements Iterable<Integer> {
-                    boolean getNext = true;
-                    Integer curr = 0;
-                    boolean more = true;
+            class ClusterIterator implements Iterable<Integer> {
+                boolean getNext = true;
+                Integer curr = 0;
+                boolean more = true;
 
-                    @Override
-                    public Iterator<Integer> iterator() {
-                        return new Iterator<Integer>() {
-                            @Override
-                            public boolean hasNext() {
-                                if (more) {
-                                    try {
-                                        if (!getNext) {
-                                            return curr != 0;
-                                        } else if (results.next()) {
-                                            curr = results.getInt("CLASS");
-                                            getNext = false;
-                                            return curr != 0;
-                                        }
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
+                @Override
+                public Iterator<Integer> iterator() {
+                    return new Iterator<Integer>() {
+                        @Override
+                        public boolean hasNext() {
+                            if (more) {
+                                try {
+                                    if (!getNext) {
+                                        return curr != 0;
+                                    } else if (results.next()) {
+                                        curr = results.getInt("CLASS");
+                                        getNext = false;
+                                        return curr != 0;
                                     }
-                                    more = false;
-                                    curr = 0;
-                                    getNext = false;
-                                    try {
-                                        results.close();
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
-                                    }
-                                }
-                                return false;
-                            }
-
-                            @Override
-                            @NotNull
-                            public Integer next() {
-                                if (hasNext()) {
-                                    getNext = true;
-                                    return curr;
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
                                 }
                                 more = false;
-                                throw new NoSuchElementException();
+                                curr = 0;
+                                getNext = false;
+                                try {
+                                    results.close();
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
                             }
-                        };
-                    }
+                            return false;
+                        }
+
+                        @Override
+                        @NotNull
+                        public Integer next() {
+                            if (hasNext()) {
+                                getNext = true;
+                                return curr;
+                            }
+                            more = false;
+                            throw new NoSuchElementException();
+                        }
+                    };
                 }
-                return new ClusterIterator().iterator();
             }
+            return new ClusterIterator().iterator();
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
@@ -526,59 +522,57 @@ public class Index implements Serializable{
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_DOCUMENT_VECTOR_BY_CLASS));
             s.setInt(1, clusterId);
             ResultSet results = s.executeQuery();
-            if (results.next()) {
-                class ClusterDocumentIterator implements Iterable<Pair<String, ArrayList<Double>>> {
-                    boolean getNext = true;
-                    boolean more = true;
-                    Pair<String, ArrayList<Double>> curr = null;
-                    @Override
-                    public Iterator<Pair<String, ArrayList<Double>>> iterator() {
-                        return new Iterator<Pair<String,ArrayList<Double>>>() {
-                            @Override
-                            public boolean hasNext() {
-                                if (more) {
-                                    try {
-                                        if (!getNext) {
-                                            return curr != null;
-                                        } else if (results.next()) {
-                                            @NotNull final String docId = results.getString("DOCID");
-                                            @NotNull final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
-                                            curr = Pair.of(docId, vec);
-                                            getNext = false;
-                                            return true;
-                                        }
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
+            class ClusterDocumentIterator implements Iterable<Pair<String, ArrayList<Double>>> {
+                boolean getNext = true;
+                boolean more = true;
+                Pair<String, ArrayList<Double>> curr = null;
+                @Override
+                public Iterator<Pair<String, ArrayList<Double>>> iterator() {
+                    return new Iterator<Pair<String,ArrayList<Double>>>() {
+                        @Override
+                        public boolean hasNext() {
+                            if (more) {
+                                try {
+                                    if (!getNext) {
+                                        return curr != null;
+                                    } else if (results.next()) {
+                                        @NotNull final String docId = results.getString("DOCID");
+                                        @NotNull final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
+                                        curr = Pair.of(docId, vec);
+                                        getNext = false;
+                                        return true;
                                     }
-
-                                    more = false;
-                                    getNext = false;
-                                    curr = null;
-                                    try {
-                                        results.close();
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
-                                    }
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
                                 }
-                                return false;
-                            }
 
-                            @Override
-                            public Pair<String, ArrayList<Double>> next() {
-                                if (hasNext()) {
-                                    getNext = true;
-                                    return curr;
-                                }
                                 more = false;
-                                throw new NoSuchElementException();
+                                getNext = false;
+                                curr = null;
+                                try {
+                                    results.close();
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
                             }
-                            
-                        };
-                    }
-                    
+                            return false;
+                        }
+
+                        @Override
+                        public Pair<String, ArrayList<Double>> next() {
+                            if (hasNext()) {
+                                getNext = true;
+                                return curr;
+                            }
+                            more = false;
+                            throw new NoSuchElementException();
+                        }
+                        
+                    };
                 }
-                return new ClusterDocumentIterator().iterator();
+                
             }
+            return new ClusterDocumentIterator().iterator();
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
@@ -599,57 +593,55 @@ public class Index implements Serializable{
             s.setInt(1, minIdx);
             s.setInt(2, minIdx + maxDocuments);
             ResultSet results = s.executeQuery();
-            if (results.next()) {
-                class AllDocumentIterator implements Iterable<Triple<String, Integer,  ArrayList<Double>>> {
-                    boolean more = true;
-                    boolean getNext = true;
-                    Triple<String, Integer, ArrayList<Double>> curr = null;
-                    @Override
-                    public Iterator<Triple<String, Integer, ArrayList<Double>>> iterator() {
-                        return new Iterator<Triple<String, Integer, ArrayList<Double>>>() {
-                            @Override
-                            public boolean hasNext() {
-                                if (more) {
-                                    try {
-                                        if (!getNext) {
-                                            return curr != null;
-                                        } else if (results.next()) {
-                                            @NotNull final String docId = results.getString("DOCID");
-                                            final int classId = results.getInt("CLASS");
-                                            final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
-                                            curr = Triple.of(docId, classId, vec);
-                                            getNext = false;
-                                            return true;
-                                        }
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
+            class AllDocumentIterator implements Iterable<Triple<String, Integer,  ArrayList<Double>>> {
+                boolean more = true;
+                boolean getNext = true;
+                Triple<String, Integer, ArrayList<Double>> curr = null;
+                @Override
+                public Iterator<Triple<String, Integer, ArrayList<Double>>> iterator() {
+                    return new Iterator<Triple<String, Integer, ArrayList<Double>>>() {
+                        @Override
+                        public boolean hasNext() {
+                            if (more) {
+                                try {
+                                    if (!getNext) {
+                                        return curr != null;
+                                    } else if (results.next()) {
+                                        @NotNull final String docId = results.getString("DOCID");
+                                        final int classId = results.getInt("CLASS");
+                                        final ArrayList<Double> vec = parseVector(results.getString("VECTOR"));
+                                        curr = Triple.of(docId, classId, vec);
+                                        getNext = false;
+                                        return true;
                                     }
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
 
-                                    more = false;
-                                    curr = null;
-                                    try {
-                                        results.close();
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
-                                    }
-                                }
-                                getNext = false;
-                                return false;
-                            }
-                            @Override
-                            public Triple<String, Integer, ArrayList<Double>> next() {
-                                if (hasNext()) {
-                                    getNext = true;
-                                    return curr;
-                                }
                                 more = false;
-                                throw new NoSuchElementException();
-                            }   
-                        };
-                    }
+                                curr = null;
+                                try {
+                                    results.close();
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
+                            }
+                            getNext = false;
+                            return false;
+                        }
+                        @Override
+                        public Triple<String, Integer, ArrayList<Double>> next() {
+                            if (hasNext()) {
+                                getNext = true;
+                                return curr;
+                            }
+                            more = false;
+                            throw new NoSuchElementException();
+                        }   
+                    };
                 }
-                return new AllDocumentIterator().iterator();
             }
+            return new AllDocumentIterator().iterator();
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
@@ -662,56 +654,54 @@ public class Index implements Serializable{
             s.setInt(1, minIdx);
             s.setInt(2, minIdx + maxDocuments);
             ResultSet results = s.executeQuery();
-            if (results.next()) {
-                class AllTfIterator implements Iterable<Pair<String, Map<String, Integer>>> {
-                    boolean more = true;
-                    boolean getNext = true;
-                    Pair<String, Map<String, Integer>> curr = null;
-                    @Override
-                    public Iterator<Pair<String, Map<String, Integer>>> iterator() {
-                        return new Iterator<Pair<String, Map<String, Integer>>>() {
-                            @Override
-                            public boolean hasNext() {
-                                if (more) {
-                                    try {
-                                        if (!getNext) {
-                                            return curr != null;
-                                        } else if (results.next()) {
-                                            @NotNull final String docId = results.getString("DOCID");
-                                            final Map<String, Integer> tfs = parseTermMap(results.getString("TOKEN_SET"));
-                                            curr = Pair.of(docId, tfs);
-                                            getNext = false;
-                                            return true;
-                                        }
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
+            class AllTfIterator implements Iterable<Pair<String, Map<String, Integer>>> {
+                boolean more = true;
+                boolean getNext = true;
+                Pair<String, Map<String, Integer>> curr = null;
+                @Override
+                public Iterator<Pair<String, Map<String, Integer>>> iterator() {
+                    return new Iterator<Pair<String, Map<String, Integer>>>() {
+                        @Override
+                        public boolean hasNext() {
+                            if (more) {
+                                try {
+                                    if (!getNext) {
+                                        return curr != null;
+                                    } else if (results.next()) {
+                                        @NotNull final String docId = results.getString("DOCID");
+                                        final Map<String, Integer> tfs = parseTermMap(results.getString("TOKEN_SET"));
+                                        curr = Pair.of(docId, tfs);
+                                        getNext = false;
+                                        return true;
                                     }
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
 
-                                    more = false;
-                                    curr = null;
-                                    try {
-                                        results.close();
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
-                                    }
-                                }
-                                getNext = false;
-                                return false;
-                            }
-                            @Override
-                            public Pair<String, Map<String, Integer>> next() {
-                                if (hasNext()) {
-                                    getNext = true;
-                                    return curr;
-                                }
                                 more = false;
-                                throw new NoSuchElementException();
-                            }   
-                        };
-                    }
+                                curr = null;
+                                try {
+                                    results.close();
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
+                            }
+                            getNext = false;
+                            return false;
+                        }
+                        @Override
+                        public Pair<String, Map<String, Integer>> next() {
+                            if (hasNext()) {
+                                getNext = true;
+                                return curr;
+                            }
+                            more = false;
+                            throw new NoSuchElementException();
+                        }   
+                    };
                 }
-                return new AllTfIterator().iterator();
             }
+            return new AllTfIterator().iterator();
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
@@ -766,58 +756,56 @@ public class Index implements Serializable{
             s.setInt(1, offset);
             s.setInt(2, offset + maxDocuments);
             final ResultSet results = s.executeQuery();
-            if (results.next()) {
-                class TokenizedIterator implements Iterable<Pair<String, Map<String, Integer>>> {
-                    boolean more = true;
-                    boolean getNext = true;
-                    Pair<String, Map<String, Integer>> curr = null;
-                    @Override
-                    public Iterator<Pair<String, Map<String, Integer>>> iterator() {
-                        return new Iterator<Pair<String,Map<String,Integer>>>() {
-                            @Override
-                            public boolean hasNext() {
-                                if (more) {
-                                    try {
-                                        if (!getNext) {
-                                            return curr != null;
-                                        } else if (results.next()) {
-                                            getNext = false;
-                                            @NotNull final String docId = results.getString("DOCID");
-                                            @NotNull final Map<String, Integer> terms = parseTermMapFromTokenizedText(results.getString("PREPROCESSED_TEXT"));
-                                            curr = Pair.of(docId, terms);
-                                            return true;
-                                        }
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
+            class TokenizedIterator implements Iterable<Pair<String, Map<String, Integer>>> {
+                boolean more = true;
+                boolean getNext = true;
+                Pair<String, Map<String, Integer>> curr = null;
+                @Override
+                public Iterator<Pair<String, Map<String, Integer>>> iterator() {
+                    return new Iterator<Pair<String,Map<String,Integer>>>() {
+                        @Override
+                        public boolean hasNext() {
+                            if (more) {
+                                try {
+                                    if (!getNext) {
+                                        return curr != null;
+                                    } else if (results.next()) {
+                                        getNext = false;
+                                        @NotNull final String docId = results.getString("DOCID");
+                                        @NotNull final Map<String, Integer> terms = parseTermMapFromTokenizedText(results.getString("PREPROCESSED_TEXT"));
+                                        curr = Pair.of(docId, terms);
+                                        return true;
                                     }
-                                    more = false;
-                                    curr = null;
-                                    try {
-                                        results.close();
-                                    } catch (SQLException ex) {
-                                        ex.printStackTrace();
-                                    }
-                                }
-                                getNext = false;
-                                return false;
-                            }
-
-                            @Override
-                            public Pair<String, Map<String, Integer>> next() {
-                                if (hasNext()) {
-                                    getNext = true;
-                                    return curr;
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
                                 }
                                 more = false;
-                                throw new NoSuchElementException();
+                                curr = null;
+                                try {
+                                    results.close();
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
                             }
-                            
-                        };
-                    }
-                    
+                            getNext = false;
+                            return false;
+                        }
+
+                        @Override
+                        public Pair<String, Map<String, Integer>> next() {
+                            if (hasNext()) {
+                                getNext = true;
+                                return curr;
+                            }
+                            more = false;
+                            throw new NoSuchElementException();
+                        }
+                        
+                    };
                 }
-                return new TokenizedIterator().iterator();
+                
             }
+            return new TokenizedIterator().iterator();
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
