@@ -24,25 +24,46 @@ public class Clustering {
      */
     public static int clusterDocuments(@NotNull final Index idx, int maxClusteringRepititions, int offset, int maxDocuments) {
         // example code that might be helpful.
-        int num = idx.getNumDocuments();
-        int randomNum = RandomUtils.nextInt(0, num);
-        Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector = idx.getDocumentVectorByIndex(randomNum);
-        int clusterId = 1;
-
+        //for now test 2
+        int numclusters = 2;
+        //int num = idx.getNumDocuments();
+        for (int i = 0; i < numclusters;i++)
+        {
+            int randomNum = RandomUtils.nextInt(0, maxDocuments);
+            Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector = idx.getDocumentVectorByIndex(randomNum);
+            System.out.println("clusterId: " + randomDocIdAndVector.get());
+            //idx.setDocumentClass(randomDocIdAndVector.get().getKey(), i);
+            idx.addFakeLeader(i, randomDocIdAndVector.get().getValue());
+            
+        }
+        //idx.clearLeaders();
         Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
-        Iterator<Integer> clusterIterator = idx.getClusters();
-        Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(clusterId); // maximum documents to retrieve
-        Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, 100000000); // documents to skip (offset), max documents to retrieve
+        Pair<Integer, ArrayList<Double>> leader = leaderIterator.next();
+        System.out.println("clusterId: " + leader.getLeft() + " " + leader.getRight());
+        //int clusterId = 1;
+    
+        //Iterator<Integer> clusterIterator = idx.getClusters();
+        //Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
+        //System.out.println("clusterId: " + clusterIterator.next());
+        //Iterator<Integer> clusterIterator = idx.getClusters();
+        //Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(clusterId); // maximum documents to retrieve
+        //Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, 100000000); // documents to skip (offset), max documents to retrieve
 
-
+        /*
         ArrayList<Double> docVector = new ArrayList<>(WordSimilarity.numDimensions);
 
         idx.addFakeLeader(clusterId, docVector);
+        //Iterator<Integer> clusterIterator = idx.getClusters();
+        Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
+        //System.out.println("clusterId: " + clusterIterator.next());
+        System.out.println("clusterId: " + leaderIterator.next().getLeft() + " "+ leaderIterator.next().getRight() );
 
-        String docId = "asfvwevwtbvqeVQr";
-        clusterId = 2;
-        idx.setDocumentClass(docId, clusterId);
-
+        //String docId = "asfvwevwtbvqeVQr";
+        //int clusterId = 2;
+        //idx.setDocumentClass(docId, clusterId);
+        */
+        //Iterator<Integer> clusterIterator = idx.getClusters();
+        //System.out.println("clusterId: " + clusterIterator.); 
         return 0;
         
     }
@@ -64,6 +85,28 @@ public class Clustering {
         double score = 0.54;
         results.add(Pair.of(docId, score));
         return results;
+    }
+
+    public static double EuclideanDistance(ArrayList<Double> p1, ArrayList<Double> p2)
+        {
+            double sum = 0;
+            for (int i = 0; i < p1.size(); i++)
+            {
+                double d = p1.get(i) - p2.get(i);
+                sum += d * d;
+            }
+            return Math.sqrt(sum);
+        }
+
+    public static ArrayList<Double> centroid(ArrayList<Double> p1, ArrayList<Double> p2)
+    {
+        ArrayList<Double> center = new ArrayList<Double>(p1.size());
+        for (int i = 0; i < p1.size(); i++)
+        {
+            center.set(i,p1.get(i) + p2.get(i));
+        
+        }
+        return center;
     }
 
 }

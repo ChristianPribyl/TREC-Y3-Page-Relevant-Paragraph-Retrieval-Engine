@@ -722,9 +722,10 @@ public class Index implements Serializable{
     public boolean setDocumentClass(@NotNull final String docId, final int clusterId) {
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.UPDATE_DOCUMENT_CLASS));
-            s.setString(1, docId);
-            s.setInt(2, clusterId);
+            s.setString(2, docId);
+            s.setInt(1, clusterId);
             final int affectedRow = s.executeUpdate();
+            s.close();
             if (affectedRow == 1) {
                 return true;
             }
