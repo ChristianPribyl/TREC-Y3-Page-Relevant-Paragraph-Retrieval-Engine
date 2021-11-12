@@ -26,6 +26,7 @@ public class Clustering {
         // example code that might be helpful.
         //for now test 2
         int numclusters = 2;
+        idx.clearLeaders();
         //int num = idx.getNumDocuments();
         for (int i = 0; i < numclusters;i++)
         {
@@ -33,15 +34,38 @@ public class Clustering {
             Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector = idx.getDocumentVectorByIndex(randomNum);
             System.out.println("clusterId: " + randomDocIdAndVector.get());
             //idx.setDocumentClass(randomDocIdAndVector.get().getKey(), i);
-            idx.addFakeLeader(i, randomDocIdAndVector.get().getValue());
+            idx.addFakeLeader(i + 1, randomDocIdAndVector.get().getValue());
+        }
+        Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
+
+        Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, maxDocuments);
+        while( documentIterator.hasNext() ) {
+            System.out.println(documentIterator.next().getLeft());
+            // EuclideanDistance
+            // update the cluser for every document in
+            
+            
             
         }
         //idx.clearLeaders();
-        Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
-        Pair<Integer, ArrayList<Double>> leader = leaderIterator.next();
-        System.out.println("clusterId: " + leader.getLeft() + " " + leader.getRight());
+
+
+        //Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
+        //Pair<Integer, ArrayList<Double>> leader = leaderIterator.next();
+        //System.out.println("clusterId: " + leader.getLeft().toString() + " " + leader.getRight().toString());
+        //System.out.println("clusterId: " + leaderIterator.next().getLeft().toString() + " " + leaderIterator.next().getRight().toString());
+        //Iterator<Integer> clusterIterator = idx.getClusters();
+        //System.out.println("clusterId: " + clusterIterator.next().intValue());
+        //Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(1);
+        //Pair<String, ArrayList<Double>> document = documentsInCluster.next();
+        //System.out.println("clusterId: " + document.getLeft() + " " + document.getRight());
+        //idx.clearLeaders();
+
+
+        //System.out.println("clusterId: " + clusterIterator.next().intValue());
+        //System.out.println("clusterId: " + clusterIterator.next().intValue());
         //int clusterId = 1;
-    
+        
         //Iterator<Integer> clusterIterator = idx.getClusters();
         //Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
         //System.out.println("clusterId: " + clusterIterator.next());
