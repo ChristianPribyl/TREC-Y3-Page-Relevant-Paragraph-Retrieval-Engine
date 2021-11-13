@@ -1,6 +1,7 @@
 package com.TeamHotel.main;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -36,58 +37,16 @@ public class Clustering {
             //idx.setDocumentClass(randomDocIdAndVector.get().getKey(), i);
             idx.addFakeLeader(i + 1, randomDocIdAndVector.get().getValue());
         }
-        Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
-
-        Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, maxDocuments);
-        while( documentIterator.hasNext() ) {
-            System.out.println(documentIterator.next().getLeft());
-            // EuclideanDistance
-            // update the cluser for every document in
-            
-            
-            
+        updateCluster(idx,maxDocuments );
+        idx.clearLeaders();
+        for (int i = 0; i < maxClusteringRepititions; i++) {
+        System.out.println(i);
+            newLeader(idx);
+            updateCluster(idx,maxDocuments );
+            idx.clearLeaders();
         }
-        //idx.clearLeaders();
-
-
-        //Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
-        //Pair<Integer, ArrayList<Double>> leader = leaderIterator.next();
-        //System.out.println("clusterId: " + leader.getLeft().toString() + " " + leader.getRight().toString());
-        //System.out.println("clusterId: " + leaderIterator.next().getLeft().toString() + " " + leaderIterator.next().getRight().toString());
-        //Iterator<Integer> clusterIterator = idx.getClusters();
-        //System.out.println("clusterId: " + clusterIterator.next().intValue());
-        //Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(1);
-        //Pair<String, ArrayList<Double>> document = documentsInCluster.next();
-        //System.out.println("clusterId: " + document.getLeft() + " " + document.getRight());
-        //idx.clearLeaders();
-
-
-        //System.out.println("clusterId: " + clusterIterator.next().intValue());
-        //System.out.println("clusterId: " + clusterIterator.next().intValue());
-        //int clusterId = 1;
-        
-        //Iterator<Integer> clusterIterator = idx.getClusters();
-        //Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
-        //System.out.println("clusterId: " + clusterIterator.next());
-        //Iterator<Integer> clusterIterator = idx.getClusters();
-        //Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(clusterId); // maximum documents to retrieve
-        //Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, 100000000); // documents to skip (offset), max documents to retrieve
-
-        /*
-        ArrayList<Double> docVector = new ArrayList<>(WordSimilarity.numDimensions);
-
-        idx.addFakeLeader(clusterId, docVector);
-        //Iterator<Integer> clusterIterator = idx.getClusters();
-        Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
-        //System.out.println("clusterId: " + clusterIterator.next());
-        System.out.println("clusterId: " + leaderIterator.next().getLeft() + " "+ leaderIterator.next().getRight() );
-
-        //String docId = "asfvwevwtbvqeVQr";
-        //int clusterId = 2;
-        //idx.setDocumentClass(docId, clusterId);
-        */
-        //Iterator<Integer> clusterIterator = idx.getClusters();
-        //System.out.println("clusterId: " + clusterIterator.); 
+    
+    
         return 0;
         
     }
@@ -111,6 +70,33 @@ public class Clustering {
         return results;
     }
 
+    public static Integer updateCluster (final Index idx, Integer numOfDoc)
+    {
+        Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, numOfDoc);
+        while( documentIterator.hasNext() ) {
+            Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
+            Triple<String, Integer, ArrayList<Double>> doc = documentIterator.next();
+            ArrayList<Double> docvec = doc.getRight();
+            String currdocID = doc.getLeft();
+            int clusterid = 0;
+            double closest = 999999.0;
+            while ( leaderIterator.hasNext() ) {
+                Pair<Integer, ArrayList<Double>> leader = leaderIterator.next();
+                ArrayList<Double> leaderDocVect = leader.getRight();
+                double dist = EuclideanDistance(leaderDocVect,docvec);
+                if(dist <= closest)
+                {
+                    clusterid = leader.getLeft();
+                    closest = dist;
+                    //System.out.println(clusterid);
+                }
+            }
+            idx.setDocumentClass(currdocID, clusterid);
+        }
+        
+        return 0;
+    }
+
     public static double EuclideanDistance(ArrayList<Double> p1, ArrayList<Double> p2)
         {
             double sum = 0;
@@ -121,16 +107,53 @@ public class Clustering {
             }
             return Math.sqrt(sum);
         }
+    
 
-    public static ArrayList<Double> centroid(ArrayList<Double> p1, ArrayList<Double> p2)
+    
+    public static Integer newLeader(final Index idx)
     {
-        ArrayList<Double> center = new ArrayList<Double>(p1.size());
+        Iterator<Integer> clusterIterator = idx.getClusters();
+        //ArrayList<Double> center = new ArrayList<Double>(p1.size());
+
+        while (clusterIterator.hasNext())
+        {
+            int clusID = clusterIterator.next();
+
+            Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(clusID);
+            ArrayList<Double> center = new ArrayList<Double>(Collections.nCopies(WordSimilarity.numDimensions, 0.0));
+            int numOfClust = 0;
+            while (documentsInCluster.hasNext())
+            {
+                ArrayList<Double> currVec = documentsInCluster.next().getRight();
+                sumAll(center,currVec);
+                numOfClust++;
+            }
+            centroid(center,numOfClust);
+            idx.addFakeLeader(clusID, center);
+        }
+        return 0;
+    }
+    public static ArrayList<Double> sumAll(ArrayList<Double> p1, ArrayList<Double> p2)
+    {
+    
+        ArrayList<Double> sum = new ArrayList<Double>(Collections.nCopies(WordSimilarity.numDimensions, 0.0));
         for (int i = 0; i < p1.size(); i++)
         {
-            center.set(i,p1.get(i) + p2.get(i));
+            //System.out.println(i);
+            sum.set(i,p1.get(i) + p2.get(i));
         
         }
-        return center;
+
+        return sum;
     }
 
+    public static ArrayList<Double> centroid (ArrayList<Double> p1, Integer num)
+    {
+        for (int i = 0; i < p1.size(); i++)
+        {
+            p1.set(i,p1.get(i)/num);
+        
+        }
+        return p1;
+    }
 }
