@@ -39,6 +39,7 @@ public class Clustering {
         }
         updateCluster(idx,maxDocuments );
         idx.clearLeaders();
+        // loop over Repititions
         for (int i = 0; i < maxClusteringRepititions; i++) {
         System.out.println(i);
             newLeader(idx);
@@ -73,6 +74,7 @@ public class Clustering {
     public static Integer updateCluster (final Index idx, Integer numOfDoc)
     {
         Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, numOfDoc);
+        // loop over all documents;
         while( documentIterator.hasNext() ) {
             Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
             Triple<String, Integer, ArrayList<Double>> doc = documentIterator.next();
@@ -80,6 +82,7 @@ public class Clustering {
             String currdocID = doc.getLeft();
             int clusterid = 0;
             double closest = 999999.0;
+            // assigned document with near leader cluster id
             while ( leaderIterator.hasNext() ) {
                 Pair<Integer, ArrayList<Double>> leader = leaderIterator.next();
                 ArrayList<Double> leaderDocVect = leader.getRight();
@@ -114,7 +117,8 @@ public class Clustering {
     {
         Iterator<Integer> clusterIterator = idx.getClusters();
         //ArrayList<Double> center = new ArrayList<Double>(p1.size());
-
+        
+        // loop over clusters. 
         while (clusterIterator.hasNext())
         {
             int clusID = clusterIterator.next();
@@ -122,6 +126,7 @@ public class Clustering {
             Iterator<Pair<String, ArrayList<Double>>> documentsInCluster = idx.getDocumentsInCluster(clusID);
             ArrayList<Double> center = new ArrayList<Double>(Collections.nCopies(WordSimilarity.numDimensions, 0.0));
             int numOfClust = 0;
+            //Sum of all docVectoer by clust id and divid numofclust to get centroid
             while (documentsInCluster.hasNext())
             {
                 ArrayList<Double> currVec = documentsInCluster.next().getRight();
