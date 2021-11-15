@@ -89,7 +89,7 @@ public class PostingsList implements Serializable {
     }
 
     public void truncate(int maxLength) {
-        System.err.printf("Truncating postingslist of length %d ", postings.size());
+        //System.err.printf("Truncating postingslist of length %d ", postings.size());
         ConcurrentSkipListMap<IndexIdentifier, IndexDocument> newPostings = new ConcurrentSkipListMap<>();
         final List<Pair<IndexIdentifier, IndexDocument>> arr = new ArrayList<>();
         postings.forEach((id, doc) -> arr.add(Pair.of(id, doc)));
@@ -98,15 +98,15 @@ public class PostingsList implements Serializable {
         final List<Pair<IndexIdentifier, IndexDocument>> arr2 = arr.subList(0, Math.min(maxLength, arr.size()));
         arr2.forEach(p -> newPostings.put(p.getLeft(), p.getRight()));
         postings = newPostings;
-        System.err.printf("to %d\n", postings.size());
+        //System.err.printf("to %d\n", postings.size());
     }
 
     public void mergeWith(PostingsList that) {
-        System.err.printf("Merging \"%s\"/%d with \"%s\"/%d\n", term(), size(), that.term(), that.size());
+        //System.err.printf("Merging \"%s\"/%d with \"%s\"/%d\n", term(), size(), that.term(), that.size());
         that.postings.forEach((IndexIdentifier id, IndexDocument doc) -> {
             doc.updateRelevantPostings(that.term(), id);
             add(new IndexIdentifier(0, doc.getFullId()), doc); //index doc id is matching too many times
         });
-        System.err.printf("Now \"%s\" has length %d\n", term(), size());
+        //System.err.printf("Now \"%s\" has length %d\n", term(), size());
     }
 }

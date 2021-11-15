@@ -121,20 +121,20 @@ public class Merge_Queries {
 		});
 		originalPostings.addAll(postingsLists);
 		List<IndexDocument> matches;
-		System.err.printf("Merging %d postings lists\n", originalPostings.size());
+		//System.err.printf("Merging %d postings lists\n", originalPostings.size());
 		if (mergeType.equals("AND")) {
-			System.err.println("AND");
+			//System.err.println("AND");
 			matches = merge_AND_query(postingsLists);
 		} else if (mergeType.equals("OR")) {
-			System.err.println("OR");
+			//System.err.println("OR");
 			matches = merge_OR_query(postingsLists);
 		} else {
 			throw new IllegalArgumentException("mergeType must be \"AND\" or \"OR\"");
 		}
-		System.err.printf("The result contains %d documents\n", matches.size());
+		//System.err.printf("The result contains %d documents\n", matches.size());
 
 		//matches = matches.subList(0, Math.min(5000, matches.size()));
-		System.err.printf("And that gets truncated to %d documents\n", matches.size());
+		//System.err.printf("And that gets truncated to %d documents\n", matches.size());
 
 		Collection<IndexDocument> rankings = Ranker.tfidf(tfidfVariant, originalPostings, matches, index.getNumDocuments());
 		assert(matches.size() == rankings.size());
@@ -338,10 +338,10 @@ public class Merge_Queries {
 	}
 
 	public static List<Pair<String, Double>> mergeFacets(List<List<Pair<String, Double>>> facets) {
-		System.err.printf("Merging %d facets\n", facets.size());
-		facets.forEach(l -> {
-			System.err.printf("Facet has %d results\n", l.size());
-		});
+		//System.err.printf("Merging %d facets\n", facets.size());
+		//facets.forEach(l -> {
+		//	System.err.printf("Facet has %d results\n", l.size());
+		//});
 		Map<String, Double> results = new TreeMap<>();
 	
 		boolean more = true;
@@ -351,7 +351,7 @@ public class Merge_Queries {
 			for (List<Pair<String, Double>> facet: facets) {
 				if (facet.size() > i && results.size() < 20) {
 					Pair<String, Double> result = facet.get(i);
-					results.put(result.getLeft(), result.getRight());
+					results.put(result.getLeft(), result.getRight() / (i+1));
 					more = true;
 				}
 			}
@@ -363,10 +363,12 @@ public class Merge_Queries {
 		.sorted((Pair<String, Double> l, Pair<String, Double> r) -> Double.compare(l.getRight(), r.getRight()))
 		.collect(Collectors.toList());
 
-		if (res.get(0).getRight() > res.get(1).getRight()) {
+		if (res.isEmpty() || res.size() == 1) {
+			return res;
+		} else if (res.get(0).getRight() > res.get(1).getRight()) {
 			return res;
 		} else {
-			System.err.println("Needed to reverse results");
+			//System.err.println("Needed to reverse results");
 			Collections.reverse(res);
 			return res;
 		}

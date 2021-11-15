@@ -31,12 +31,13 @@ public class Index implements Serializable{
     static {
         queryStrings = new HashMap<>();
         queryStrings.put(QUERY.INSERT_POSTINGS,                 "INSERT INTO POSTINGS VALUES (?, ?, 0, '')");
-        queryStrings.put(QUERY.INSERT_DOCUMENT,                 "INSERT INTO DOCUMENTS VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, 0)");
-        queryStrings.put(QUERY.INSERT_FAKE_LEADER,              "INSERT INTO DOCUMENTS VALUES (?, NULL, NULL, NULL, NULL, ?, ?, 1, 1)");
+        queryStrings.put(QUERY.INSERT_DOCUMENT,                 "INSERT INTO DOCUMENTS VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, 0, 0)");
+        queryStrings.put(QUERY.INSERT_FAKE_LEADER,              "INSERT INTO DOCUMENTS VALUES (?, NULL, NULL, NULL, NULL, ?, ?, 1, 1, 0)");
         queryStrings.put(QUERY.UPDATE_POSTINGS,                 "UPDATE POSTINGS SET (DOC_FREQUENCY, POSTINGS_LIST) = (?, ?) WHERE TERM = ?");
         queryStrings.put(QUERY.UPDATE_DOCUMENT_VECTOR,          "UPDATE DOCUMENTS SET VECTOR=? WHERE DOCID=?");
         queryStrings.put(QUERY.UPDATE_DOCUMENT_CLASS,           "UPDATE DOCUMENTS SET CLASS=? WHERE DOCID=?");
         queryStrings.put(QUERY.UNSET_LEADERS,                   "UPDATE DOCUMENTS SET LEADER=0 WHERE LEADER=1");
+        queryStrings.put(QUERY.MARK_SCORED,                     "UPDATE DOCUMENTS SET SCORED=1 WHERE DOCID=?");
         queryStrings.put(QUERY.DELETE_EXTRA_FAKES,              "DELETE FROM DOCUMENTS WHERE (FAKE=1 AND LEADER=0)");
         queryStrings.put(QUERY.DELETE_POSTINGS,                 "DELETE FROM POSTINGS");
         queryStrings.put(QUERY.SELECT_VECTOR_BY_INDEX,          "SELECT DOCID, VECTOR FROM DOCUMENTS WHERE (ID=?) AND (FAKE=0)");
@@ -53,7 +54,7 @@ public class Index implements Serializable{
     enum QUERY { INSERT_POSTINGS, SELECT_POSTINGS, INSERT_DOCUMENT, UPDATE_DOCUMENT_VECTOR, UPDATE_DOCUMENT_CLASS,
     INSERT_FAKE_LEADER, SELECT_DOCUMENT_VECTOR_BY_CLASS, SELECT_LEADER_VECTORS, SELECT_DOCUMENT_FULLTEXT, DELETE_EXTRA_FAKES,
     UNSET_LEADERS, SELECT_VECTOR_BY_INDEX, COUNT_DOCUMENTS, SELECT_CLUSTERS, SELECT_ALL_DOCID_VECTOR_CLUSTER, SELECT_TOKENIZED_DOCUMENTS,
-    SELECT_ALL_DOC_TF, UPDATE_POSTINGS, DELETE_POSTINGS }
+    SELECT_ALL_DOC_TF, UPDATE_POSTINGS, DELETE_POSTINGS, MARK_SCORED }
 
 
     /**
@@ -744,6 +745,22 @@ public class Index implements Serializable{
         return false;
     }
 
+    public boolean markDocumentRelevant(@NotNull final String docID) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.MARK_SCORED));
+            s.setString(1, docID);
+            int affectedRows = s.executeUpdate();
+            s.close();
+            if (affectedRows == 1) {
+                return true;
+            }
+            System.err.printf("Error setting document vector.  Expected 1 affected row, got %d\n", affectedRows);
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return false;
+    }
+
         /**
      * returns an iterator that iterates over all documents, providing the document id
      * @param offset - how many documents to skip before iterating.  0 will start at the first document.
@@ -935,6 +952,7 @@ public class Index implements Serializable{
         @NotNull final ArrayList<Double> vec = new ArrayList<>(WordSimilarity.numDimensions);
         try {
             @NotNull final Scanner vecScanner = new Scanner(vectorString);
+            vecScanner.useDelimiter(",|\\s+");
             vecScanner.forEachRemaining(d -> vec.add(Double.parseDouble(d)));
             vecScanner.close();
             if (vec.size() == WordSimilarity.numDimensions) {

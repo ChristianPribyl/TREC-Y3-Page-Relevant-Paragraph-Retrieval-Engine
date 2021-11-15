@@ -39,6 +39,7 @@ public class Clustering {
         }
         updateCluster(idx,maxDocuments );
         idx.clearLeaders();
+        System.out.println("Assigning new clusters to each document");
         // loop over Repititions
         for (int i = 0; i < maxClusteringRepititions; i++) {
         System.out.println(i);
@@ -73,16 +74,19 @@ public class Clustering {
 
     public static Integer updateCluster (final Index idx, Integer numOfDoc)
     {
+        idx.beginTransaction();
         Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, numOfDoc);
         // loop over all documents;
+        int numUpdated = 0;
         while( documentIterator.hasNext() ) {
             Iterator<Pair<Integer, ArrayList<Double>>> leaderIterator = idx.getClusterLeaders();
             Triple<String, Integer, ArrayList<Double>> doc = documentIterator.next();
             ArrayList<Double> docvec = doc.getRight();
             String currdocID = doc.getLeft();
             int clusterid = 0;
-            double closest = 999999.0;
+            double closest = Double.MAX_VALUE;
             // assigned document with near leader cluster id
+            System.out.println("Looping over leaders");
             while ( leaderIterator.hasNext() ) {
                 Pair<Integer, ArrayList<Double>> leader = leaderIterator.next();
                 ArrayList<Double> leaderDocVect = leader.getRight();
@@ -95,7 +99,12 @@ public class Clustering {
                 }
             }
             idx.setDocumentClass(currdocID, clusterid);
+            numUpdated++;
+            if (numUpdated % 10 == 0) {
+                System.out.printf("Assigned clusters to %d documents\n", numUpdated);
+            }
         }
+        idx.commitTransaction();
         
         return 0;
     }
@@ -108,7 +117,7 @@ public class Clustering {
                 double d = p1.get(i) - p2.get(i);
                 sum += d * d;
             }
-            return Math.sqrt(sum);
+            return sum;//Math.sqrt(sum);
         }
     
 

@@ -153,7 +153,9 @@ public class Main {
                     final List<String> vocab = Preprocess.loadVocab(vocabFile);
                     System.err.println("Instantiating Index");
                     Index idx = Index.load(dbname).get();
+                    System.err.println("Deleting existing postings");
                     idx.deletePostings();
+                    System.err.println("Creating new empty postings");
                     idx.addEmptyPostings(vocab);
                 } else {
                     System.out.println("Usage: ir-engine reset-postings <index> <vocab-file>");
@@ -315,8 +317,8 @@ public class Main {
                     final Index idx = Index.load(dbname).get();
                     final Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
 
-                    FileWriter logfile = new FileWriter("../queryLog.txt");
-                    FileWriter runFile = new FileWriter("../tfidf-atc_btc-TeamHotel.run");
+                    FileWriter logfile = new FileWriter("queryLog.txt");
+                    FileWriter runFile = new FileWriter(String.format("tfidf-%s-TeamHotel.run", tfidfVariant.replace('.', '_')));
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
 
@@ -392,6 +394,18 @@ public class Main {
                     Preprocess.dumpQueryIds(queryFile);
                 } else {
                     System.err.println("Usage: ir-engine <query-ids>");
+                }
+                break;
+            }
+            case "mark-scored-documents": {
+                if (args.length == 3) {
+                    final String dbname = args[1];
+                    final String docFile = args[2];
+                    List<String> scoredDocs = Preprocess.loadVocab(docFile);
+                    Index idx = Index.load(dbname).get();
+                    idx.beginTransaction();
+                    scoredDocs.forEach(id -> idx.markDocumentRelevant(id));
+                    idx.commitTransaction();
                 }
                 break;
             }
