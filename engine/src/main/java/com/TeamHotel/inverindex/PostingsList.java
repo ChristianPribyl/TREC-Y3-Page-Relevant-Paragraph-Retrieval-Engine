@@ -11,6 +11,7 @@ public class PostingsList implements Serializable {
     @NotNull private ConcurrentSkipListMap<IndexIdentifier, IndexDocument> postings;
     private int size;
     private int queryTF = 1;
+    private double storedValue;
 
     public PostingsList(@NotNull final String term) {
         this.term = term;
@@ -26,6 +27,14 @@ public class PostingsList implements Serializable {
         } else {
             //System.out.println("Adding already included document.");
         }
+    }
+
+    public void storeValue(double v) {
+        this.storedValue = v;
+    }
+
+    public double getStoredValue() {
+        return storedValue;
     }
 
     public void incQueryTermFrequency() {

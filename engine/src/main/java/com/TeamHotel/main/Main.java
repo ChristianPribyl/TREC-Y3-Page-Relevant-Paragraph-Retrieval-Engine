@@ -4,59 +4,32 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import com.TeamHotel.inverindex.Index;
 import com.TeamHotel.inverindex.InvertedIndex;
 import com.TeamHotel.merge_queries.Merge_Queries;
-import com.TeamHotel.merge_queries.Ranker;
 import com.TeamHotel.preprocessor.Preprocess;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 
 public class Main {
+    static final String teamName = "TeamHotel";
+    static final String progName = "ir-engine";
     public static void main(String[] args) throws IOException {
         System.setProperty("file.encoding", "UTF-8");
-        if (args.length == 0) {
-            usage();
-            return;
-        }
         switch (args[0]) {
-            case "vocab":
-                Set<String> vocabulary;
-                if (args.length == 3 && args[1].equals("queries")) {
-                    // args[2] cbor-outlines file
-
-                    final String cborQueryFile = args[2];
-                    // Map<QueryId, Set<Unique words>>
-                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile, Preprocess.QueryType.PAGES);
-                    vocabulary = Preprocess.getVocabulary(queries);
-                } else if (args.length == 2) {
-                    // args[1] cbor-paragraphs file
-
-                    final String cborParagraphsFile = args[1];
-                    // Map<paragraphsId, Map<term, tf>>
-                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> paragraphs = Preprocess.preprocessLargeCborParagrphsWithVocab(cborParagraphsFile, Collections.<String>emptySet(), 0, 2500000);
-                    vocabulary = Preprocess.getVocabulary(paragraphs);
-                } else {
-                    vocabUsage();
-                    return;
-                }
-                Preprocess.printVocabulary(vocabulary);
-                break;
             case "query-vocab": {
                 if (args.length == 3) {
                     final String cborQueryFile = args[1];
@@ -79,7 +52,7 @@ public class Main {
                         System.err.println("Failed to write vocab to file");
                     }
                 } else {
-                    System.err.println("Usage: ir-engine query-vocab <cbor-queries> <outfile>");
+                    System.err.printf("Usage: %s query-vocab <cbor-queries> <outfile>\n", progName);
                 }
                 break;
             }
@@ -101,13 +74,14 @@ public class Main {
                                 ex.printStackTrace();
                             }
                         });
+                        outf.close();
                         System.err.println("Wrote vocabulary to file");         
                     } catch (IOException ex) {
                         ex.printStackTrace();
                         System.err.println("Failed to write vocab to file");
                     }           
                 } else {
-                    System.err.println("Usage: ir-engine corpus-vocab <cbor-paragraphs> <outfile> <offset> <max-paragraphs-to-parse>");
+                    System.err.printf("Usage: %s corpus-vocab <cbor-paragraphs> <outfile> <offset> <max-paragraphs-to-parse>\n", progName);
                 }
                 break;
             }
@@ -123,7 +97,7 @@ public class Main {
                     outf.close();
                     System.out.printf("Processed %d word vectors\n", numProcessed);
                 } else {
-                    System.out.println("Usage: ir-engine preprocess-similarity-vectors <infile> <outfile>");
+                    System.out.printf("Usage: %s preprocess-similarity-vectors <infile> <outfile>\n", progName);
                 }
                 break;
             }
@@ -141,7 +115,7 @@ public class Main {
                     System.err.println("Generating postings lists");
                     InvertedIndex.generatePostings(idx, vocab, offset, maxDocuments);
                 } else {
-                    System.out.println("Usage: ir-engine make-postings <index> <vocab-file> <offset> <max-documents-to-parse>");
+                    System.out.printf("Usage: %s make-postings <index> <vocab-file> <offset> <max-documents-to-parse>\n", progName);
                 }
                 break;
             }
@@ -158,7 +132,7 @@ public class Main {
                     System.err.println("Creating new empty postings");
                     idx.addEmptyPostings(vocab);
                 } else {
-                    System.out.println("Usage: ir-engine reset-postings <index> <vocab-file>");
+                    System.out.printf("Usage: %s reset-postings <index> <vocab-file>\n", progName);
                 }
                 break;
             }
@@ -173,7 +147,7 @@ public class Main {
                         System.err.println("Index creation succeeded");
                     }
                 } else {
-                    System.err.println("Usage: ir-engine create-empty-index <index-location>");
+                    System.err.printf("Usage: %s create-empty-index <index-location>\n", progName);
                 }
                 break;
             }
@@ -192,7 +166,7 @@ public class Main {
                     int numAdded = idx.addNewDocuments(cborCorpus, vocab.stream().collect(Collectors.toSet()), offset, maxDocuments);
                     System.err.printf("Added %d documents to the Index\n", numAdded);
                 } else {
-                    System.err.println("Usage: ir-engine add-documents <index-location> <vocab-file> <corpus-file> <corpus-offset> <max-to-add>");
+                    System.err.printf("Usage: %s add-documents <index-location> <vocab-file> <corpus-file> <corpus-offset> <max-to-add>\n", progName);
                 }
                 break;
             }
@@ -208,7 +182,7 @@ public class Main {
                     int numCalculated = WordSimilarity.calculateDocVectors(idx, wordVectorFile, offset, maxDocuments);
                     System.err.printf("Calculated vectors for %d documents\n", numCalculated);
                 } else {
-                    System.err.println("Usage: ir-engine calculate-vectors <index-location> <word-vector-file> <corpus-offset> <max-to-process>");
+                    System.err.printf("Usage: %s calculate-vectors <index-location> <word-vector-file> <corpus-offset> <max-to-process>\n", progName);
                 }
                 break;
             }
@@ -224,40 +198,7 @@ public class Main {
                     int numClusters = Clustering.clusterDocuments(idx, numClusterPasses, offset, maxDocuments);
                     System.err.printf("Clustered %d documents\n", numClusters);
                 } else {
-                    System.err.println("Usage: ir-engine ccluster <index-location> <num-cluster-passes> <corpus-offset> <max-docs-to-cluster>");
-                }
-                break;
-            }
-            case "cbor-query": {
-                if (args.length == 5) {
-                    final String invertedIndexFile = args[1];
-                    final String cborQueryFile = args[2];
-                    final String mergeType = args[3].toUpperCase();
-                    assert (mergeType.equals("AND") || mergeType.equals("OR"));
-                    final String tfidfVariant = args[4];
-                    // preprocess cbor queries.
-                    // execute queries in sequence.
-                    final InvertedIndex invertedIndex = null;//InvertedIndex.loadInvertedIndex(invertedIndexFile);
-                    assert invertedIndex != null;
-                    final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> queries = Preprocess.preprocessCborQueries(cborQueryFile, Preprocess.QueryType.PAGES);
-                    StringBuilder out = new StringBuilder();
-                    queries.forEach((id, terms) -> {
-                        System.out.println((String.format("Processing query %s\n", id)));
-                        terms.forEach((term, num) -> System.out.printf("%s ", term));
-                        System.out.println();
-                        //Merge_Queries.query(invertedIndex, terms, mergeType, tfidfVariant).forEach(r -> out.append(String.format("%s Q0 %s\n", id, r)));
-                        // $queryId Q0 $paragraphId $rank $score $teamName-$methodName
-                    });
-                    try {
-                        FileWriter outFile = new FileWriter(String.format("%s" + "-Y3.run", mergeType+tfidfVariant));
-                        outFile.write(out.toString());
-                        outFile.close();
-                    } catch (IOException ex) {
-                        ex.printStackTrace(System.err);
-                        System.err.println("Failed to write results to run file");
-                    }
-                } else {
-                    cborQueryUsage();
+                    System.err.printf("Usage: %s ccluster <index-location> <num-cluster-passes> <corpus-offset> <max-docs-to-cluster>\n", progName);
                 }
                 break;
             }
@@ -286,39 +227,137 @@ public class Main {
                             final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet, resultsPerQuery);
                             allFacetResults.add(facetResults);
                         });
-                        final List<Pair<String, Double>> finalResult = Ranker.mergeResults(allFacetResults);
+                        final List<Pair<String, Double>> finalResult = Merge_Queries.mergeFacets(allFacetResults, 20);
 
                         AtomicInteger i = new AtomicInteger();
                         finalResult.forEach(p -> {
                             try {
                                 outFile.write(String.format("%s Q0 %s %d %f TeamHotel-%s", queryID, p.getLeft(), i, p.getRight(), "WordSimilarity"));
-                            } catch (IOException e) {
-                                // TODO Auto-generated catch block
-                                e.printStackTrace();
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
                             }
                             idx.logResult(queryID, p.getLeft(), p.getRight(), i.getAndIncrement());
                         });
 
                     });
                 } else {
-                    dumpClusterCborQueryUsage();
+                    System.out.printf("Usage: %s cluster-cbor-query index-name cborQueryFile\n", progName);
                 }
                 break;
             }
             case "tfidf-cbor-query": {
-                if (args.length == 5) {
+                if (args.length == 6) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
+                    final String qrelFile = args[3];
+                    final String tfidfVariant = args[4];
+                    final String filterScored = args[5];
+
+                    final Index idx = Index.load(dbname).get();
+                    final Map<String, Set<String>> qrelDocs = Preprocess.getScoredQrelDocs(qrelFile).get();
+                    final Map<String, List<List<String>>> facetedQueries = getFacetedQueries(cborQueryFile, qrelFile);
+                    final String modelName = "tfidf_atc.btc";
+                    FileWriter logfile = new FileWriter("queryLog.txt", true);
+                    FileWriter runFile = new FileWriter(String.format("tfidf-%s-TeamHotel.run", tfidfVariant.replace('.', '_')));
+
+                    Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
+                    facetedQueries.forEach((queryId, facets) -> {
+                        queryResults.put(queryId, new ArrayList<>(facets.size()));
+                        facets.forEach(facet -> {
+                            Map<String, Integer> terms = new HashMap<>();
+                            facet.stream().forEach((String t) -> {
+                                Integer prev = terms.put(t, 1);
+                                if (prev != null) {
+                                    terms.put(t, prev + 1);
+                                }
+                            });
+                            try {
+                                logfile.write(String.format("Querying Facet of %s with terms: ", queryId));
+                                facet.forEach(w -> {
+                                    try {
+                                        logfile.write(String.format(" %s", w));
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                });
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                            System.out.println();
+                            List<Pair<String, Double>> facetResults = Merge_Queries.queryTfidf(idx, terms, tfidfVariant, logfile, 1000);
+                            queryResults.get(queryId).add(facetResults);
+                            System.out.printf("Facet has %d documents\n", facetResults.size());
+                            System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
+                        });
+                    });
+
+                    Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
+                    queryResults.forEach((qid, facets) -> {
+                        System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                        List<Pair<String, Double>> result;
+                        if (filterScored.toLowerCase().equals("filter")) {
+                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                        }
+                        else {
+                            result = Merge_Queries.mergeFacets(facets, 20);
+                        }
+                        System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                        finalResults.put(qid, result);
+                    });
+
+                    System.err.printf("Final results contains results for %d queries\n", finalResults.size());
+
+                    AtomicInteger i = new AtomicInteger(1);
+                    finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
+                        i.set(1);
+                        results.forEach((Pair<String, Double> p) -> {
+                            final String docid = p.getLeft();
+                            final Double score = p.getRight();
+                            try {
+                                runFile.write(String.format("%s Q0 %s %d %f %s-%s\n", qid, docid, i.getAndIncrement(), score, teamName, modelName));
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
+                            //$queryId Q0 $paragraphId $rank $score $teamName-$methodName
+                        });
+                    });
+                    runFile.close();
+                } else {
+                    System.out.printf("Usage: %s tfidf-cbor-query <index-file> <cbor-query-file> <qrel> <qqq.ddd> <filter|nofilter>\n", progName);
+                }
+                break;
+            }
+            case "bm25-cbor-query": {
+                if (args.length == 6) {
+                    final String dbname = args[1];
+                    final String cborQueryFile = args[2];
+                    final String qrelFile = args[3];
                     //final String mergeType = args[3].toUpperCase();
                     //assert (mergeType.equals("AND") || mergeType.equals("OR"));
-                    final String tfidfVariant = args[4];
+                    final String filterScored = args[4];
+                    final int k1 = Integer.parseInt(args[5]);
+                    final int k2 = Integer.parseInt(args[6]);
+                    final int k3 = Integer.parseInt(args[7]);
+                    final double alpha = Double.parseDouble(args[8]);
                     // preprocess cbor queries.
                     // execute queries in sequence.
                     final Index idx = Index.load(dbname).get();
+
+                    final Map<String, Set<String>> qrelDocs = Preprocess.getScoredQrelDocs(qrelFile).get();
+
                     final Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
 
+                    // remove queries without qrel evaluation data
+                    final List<String> toRemove = new LinkedList<>();
+                    facetedQueries.keySet().forEach(qid -> {
+                        if (!qrelDocs.keySet().contains(qid)) {
+                            toRemove.add(qid);
+                        }
+                    });
+                    toRemove.forEach(qid -> facetedQueries.remove(qid));
+
                     FileWriter logfile = new FileWriter("queryLog.txt");
-                    FileWriter runFile = new FileWriter(String.format("tfidf-%s-TeamHotel.run", tfidfVariant.replace('.', '_')));
+                    FileWriter runFile = new FileWriter(String.format("bm25_%d_%d_%d_%0.2f-TeamHotel.run", k1, k2, k3, alpha));
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
 
@@ -348,20 +387,26 @@ public class Main {
                                 e.printStackTrace();
                             }
                             System.out.println();
-                            List<Pair<String, Double>> facetResults = Merge_Queries.query(idx, terms, "OR", tfidfVariant, logfile);
+                            List<Pair<String, Double>> facetResults = Merge_Queries.queryBM25(idx, terms, k1, k2, k3, alpha, logfile, 1000);
                             queryResults.get(queryId).add(facetResults);
                             System.out.printf("Facet has %d documents\n", facetResults.size());
                             System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
                         });
                     });
 
-                    final String modelName = "tfidf_atc.btc";
+                    final String modelName = "bm25";
                     final String teamName = "TeamHotel";
 
                     Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
                     queryResults.forEach((qid, facets) -> {
                         System.err.printf("qid %s has %d facets\n", qid, facets.size());
-                        List<Pair<String, Double>> result = Merge_Queries.mergeFacets(facets);
+                        List<Pair<String, Double>> result;
+                        if (filterScored.toLowerCase().equals("filter")) {
+                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                        }
+                        else {
+                            result = Merge_Queries.mergeFacets(facets, 20);
+                        }
                         System.err.printf("merging them together we get %d ranked documents\n", result.size());
                         finalResults.put(qid, result);
                     });
@@ -384,7 +429,7 @@ public class Main {
                     });
                     runFile.close();
                 } else {
-                    cborQueryUsage();
+                    System.out.printf("Usage: %s bm25-cbor-query <index> <cbor-query-file> <qrel> <filter|nofilter> <k1> <k2> <k3> <alpha>\n", progName);
                 }
                 break;
             }
@@ -393,7 +438,7 @@ public class Main {
                     final String queryFile = args[1];
                     Preprocess.dumpQueryIds(queryFile);
                 } else {
-                    System.err.println("Usage: ir-engine <query-ids>");
+                    System.err.printf("Usage: %s query-ids <cborOutlines>\n", progName);
                 }
                 break;
             }
@@ -410,39 +455,24 @@ public class Main {
                 break;
             }
             default:
-                usage();
+            System.out.printf("Usage: %s [query-vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query | make-postings | reset-postings]\n" +
+            "Run commands for specific usage instructions\n", progName);
         }
     }
 
-    private static void dumpClusterCborQueryUsage() {
-        System.out.println("Usage: ir-engine cluster-cbor-query index-name cborQueryFile");
-    }
+    static Map<String, List<List<String>>> getFacetedQueries(final String cborOutlines, final String qrel) {
+        final Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborOutlines);
+        final Map<String, Set<String>> qrelDocs = Preprocess.getScoredQrelDocs(qrel).get();
 
-    static void usage() {
-        System.out.println("USage: ir-engine [query-vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query | make-postings | reset-postings]\n" +
-        "Run commands for specific usage instructions");
-        //System.out.println("Usage: prog-4 [vocab | index | dump-index | query | cbor-query]\n" +
-        //        "Run commands for specific usage instructions");
-    }
+        // remove queries without qrel evaluation data
+        final List<String> toRemove = new LinkedList<>();
+        facetedQueries.keySet().forEach(qid -> {
+            if (!qrelDocs.keySet().contains(qid)) {
+                toRemove.add(qid);
+            }
+        });
+        toRemove.forEach(qid -> facetedQueries.remove(qid));
 
-    static void vocabUsage() {
-        System.out.println("Usage: prog-4 vocab <cbor-paragraphs>\n" +
-                "       prog-4 queries <cbor-outlines>");
-    }
-
-    static void indexUsage() {
-        System.out.println("Usage: prog-4 index <vocab-file> <cbor-paragraphs-file> <index-save-location>");
-    }
-
-    static void dumpIndexUsage() {
-        System.out.println("Usage: prog-4 dump-index <index-file>");
-    }
-
-    static void queryUsage() {
-        System.out.println("Usage: prog-4 query <index-file> [AND | OR] <qqq.ddd>");
-    }
-
-   static void cborQueryUsage() {
-        System.out.println("Usage: prog-4 cbor-query <index-file> <cbor-query-file> [AND | OR] <qqq.ddd>");
+        return facetedQueries;
     }
 }

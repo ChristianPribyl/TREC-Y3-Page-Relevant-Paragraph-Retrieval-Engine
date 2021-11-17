@@ -2,7 +2,6 @@ package com.TeamHotel.main;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -11,7 +10,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Scanner;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.TeamHotel.inverindex.Index;
@@ -41,15 +39,12 @@ public class WordSimilarity {
             AtomicInteger counter = new AtomicInteger();
             ArrayList<Double> wordVector = new ArrayList<>(Collections.nCopies(numDimensions, 0.0));
 
-            int numVecs = 0;
             for (Map.Entry<String, Integer> e: termFrequencies.entrySet()) {
                 String term = e.getKey();
-                Integer tf = e.getValue();
                 // get word vector from file
                 ArrayList<Double> wordVec = wordVectors.get(term);
                 if (wordVec != null) {
                     addVectors(wordVector,wordVectors.get(term));
-                    numVecs++;
                 }
                 //System.out.println(wordVectors.get(term));
                 counter.incrementAndGet();
@@ -131,7 +126,7 @@ public class WordSimilarity {
             return false;
         }
         try {
-            double d = Double.parseDouble(strNum);
+            Double.parseDouble(strNum);
         } catch (NumberFormatException e) {
             return false;
         }

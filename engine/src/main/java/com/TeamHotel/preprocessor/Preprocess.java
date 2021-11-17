@@ -3,6 +3,7 @@ package com.TeamHotel.preprocessor;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import java.io.FileInputStream;
@@ -498,5 +499,27 @@ public class Preprocess {
             final String queryId = query.getPageId();
             System.out.println(queryId);
         }
+    }
+
+    public static Optional<Map<String, Set<String>>> getScoredQrelDocs(String qrelFile) {
+        try {
+            Scanner sc = new Scanner(new FileInputStream(qrelFile));
+            final Map<String, Set<String>> scoredDocs = new HashMap<>();
+            while (sc.hasNext()) {
+                final Scanner lineSc = new Scanner(sc.nextLine());
+                //lineSc.useDelimiter(Pattern.compile(":|\\s+"));
+                //lineSc.next();
+                final String qid = lineSc.next();
+                lineSc.next();
+                final String docId = lineSc.next();
+                System.out.printf("qid %s doc %s\n", qid, docId);
+                scoredDocs.putIfAbsent(qid, new HashSet<>());
+                scoredDocs.get(qid).add(docId);
+            }
+            return Optional.of(scoredDocs);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return Optional.empty();
     }
 }

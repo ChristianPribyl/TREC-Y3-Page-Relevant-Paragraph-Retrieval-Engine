@@ -50,11 +50,12 @@ public class Index implements Serializable{
         queryStrings.put(QUERY.SELECT_ALL_DOCID_VECTOR_CLUSTER, "SELECT DOCID, VECTOR, CLASS FROM DOCUMENTS WHERE (FAKE=0) AND (ID >= ?) AND (ID < ?)");
         queryStrings.put(QUERY.SELECT_TOKENIZED_DOCUMENTS,      "SELECT DOCID, PREPROCESSED_TEXT FROM DOCUMENTS WHERE (FAKE=0) AND (ID >= ?) AND (ID < ?)");
         queryStrings.put(QUERY.SELECT_ALL_DOC_TF,               "SELECT DOCID, TOKEN_SET FROM DOCUMENTS WHERE (FAKE=0) AND (ID >= ?) AND (ID < ?)");
+        queryStrings.put(QUERY.GET_DOC_TERM_MAP,                "SELECT TOKEN_SET FROM DOCUMENTS WHERE (FAKE=0) AND (DOCID=?)");
     }
     enum QUERY { INSERT_POSTINGS, SELECT_POSTINGS, INSERT_DOCUMENT, UPDATE_DOCUMENT_VECTOR, UPDATE_DOCUMENT_CLASS,
     INSERT_FAKE_LEADER, SELECT_DOCUMENT_VECTOR_BY_CLASS, SELECT_LEADER_VECTORS, SELECT_DOCUMENT_FULLTEXT, DELETE_EXTRA_FAKES,
     UNSET_LEADERS, SELECT_VECTOR_BY_INDEX, COUNT_DOCUMENTS, SELECT_CLUSTERS, SELECT_ALL_DOCID_VECTOR_CLUSTER, SELECT_TOKENIZED_DOCUMENTS,
-    SELECT_ALL_DOC_TF, UPDATE_POSTINGS, DELETE_POSTINGS, MARK_SCORED }
+    SELECT_ALL_DOC_TF, UPDATE_POSTINGS, DELETE_POSTINGS, MARK_SCORED, GET_DOC_TERM_MAP }
 
 
     /**
@@ -708,6 +709,22 @@ public class Index implements Serializable{
         }
         System.out.println("Returning empty iterator");
         return Collections.emptyIterator();
+    }
+
+    public Optional<Map<String, Integer>> getDocumentTermMap(@NotNull final String docId) {
+        try {
+            final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.GET_DOC_TERM_MAP));
+            s.setString(1, docId);
+            final ResultSet res = s.executeQuery();
+            if (res.next()) {
+                final Map<String, Integer> tfs = parseTermMap(res.getString("TOKEN_SET"));
+                res.close();
+                return Optional.of(tfs);
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return Optional.empty();
     }
 
     public boolean setDocumentClass(@NotNull final String docId, final int clusterId) {

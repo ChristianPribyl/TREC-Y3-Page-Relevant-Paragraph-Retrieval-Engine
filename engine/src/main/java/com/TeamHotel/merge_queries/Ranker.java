@@ -4,7 +4,6 @@ import com.TeamHotel.inverindex.IndexDocument;
 import com.TeamHotel.inverindex.IndexIdentifier;
 import com.TeamHotel.inverindex.PostingsList;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -13,32 +12,38 @@ import java.util.stream.Collectors;
 public class Ranker {
     private final Set<PostingsList> queryPostings;
     private final Map<String, Integer> dfCache;
-    private final char[] variant;
+    private char[] variant;
     private final int corpusSize;
-    private final double[] queryVector;
+    private double[] queryVector;
+    private int k1;
+    private int k2;
+    private int k3;
+    private double beta;
 
-    public Ranker(String variant, TreeSet<PostingsList> queryPostings, int corpusSize) {
+    public Ranker(TreeSet<PostingsList> queryPostings, int corpusSize) {
+        this.corpusSize = corpusSize;
+        this.queryPostings = queryPostings;
+        dfCache = queryPostings.stream().collect(Collectors.toMap(PostingsList::term, PostingsList::size));
+    }
+
+    private static Ranker tfidfRanker(String variant, TreeSet<PostingsList> queryPostings, int corpusSize) {
+        Ranker r = new Ranker(queryPostings, corpusSize);
         char[] variantData = variant.toCharArray();
         assert(variantData[0] == variantData[4]);
         assert(variantData.length == 7);
-
-        this.variant = variant.toCharArray();
-        this.corpusSize = corpusSize;
-
-        this.queryPostings = queryPostings;
-
-        dfCache = queryPostings.stream().collect(Collectors.toMap(PostingsList::term, PostingsList::size));
-        queryVector = calculateQueryVector(queryPostings);
+        r.variant = variantData;
+        r.queryVector = r.calculateQueryVector(queryPostings);
+        return r;
     }
 
     public static Collection<IndexDocument> tfidf(@NotNull String variant, @NotNull TreeSet<PostingsList> queryTerms,
                                                   @NotNull List<IndexDocument> candidates, int corpusSize) {
         assert(validateVariant(variant));
-        Ranker ranker = new Ranker(variant, queryTerms, corpusSize);
+        Ranker ranker = tfidfRanker(variant, queryTerms, corpusSize);
         List<IndexDocument> rankings = new LinkedList<>();
         System.out.printf("Ranking %d documents\n", candidates.size());
         candidates.forEach(doc -> {
-            double score = ranker.score(doc);
+            double score = ranker.tfidfScore(doc);
             doc.setFinalScore(score);
             int idx = 0;
             for (IndexDocument d: rankings) {
@@ -52,6 +57,48 @@ public class Ranker {
         return rankings;
     }
 
+    private static Ranker bm25Ranker(TreeSet<PostingsList> queryTerms, int corpusSize, int k1, int k2, int k3, double beta) {
+        Ranker r = new Ranker(queryTerms, corpusSize);
+        r.k1 = k1;
+        r.k2 = k2;
+        r.k3 = k3;
+        r.beta = beta;
+        return r;
+    }
+
+    public static Collection<IndexDocument> bm25(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
+            int corpusSize, int k1, int k2, int k3, double beta) {
+        Ranker ranker = bm25Ranker(queryTerms, corpusSize, k1, k2, k3, beta);
+        List<IndexDocument> rankings = new LinkedList<>();
+        System.out.printf("Ranking %d documents\n", candidates.size());
+        candidates.forEach(doc -> {
+            double score = ranker.bm25Score(doc);
+            doc.setFinalScore(score);
+            int idx = 0;
+            for (IndexDocument d: rankings) {
+                if (score > d.getFinalScore()) {
+                    break;
+                }
+                idx++;
+            }
+            rankings.add(idx, doc);
+        });
+        return rankings;
+    }
+
+    private double bm25Score(IndexDocument doc) {
+        double L = (1 - beta) + (beta * doc.getNumTerms());
+        return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
+            double tfd = doc.termFrequency(termPosting.term());
+            double tfq = termPosting.getQueryTermFrequency();
+            return (Math.log(corpusSize * 1.0 / termPosting.size())
+            * ((k1 + 1) * tfd)
+            * ((k3 + 1) * tfq)
+            / (((k1 * L) + tfd)
+              * (k3 + tfq)));
+        })).getSum();
+    }
+
     private static boolean validateVariant(@NotNull String variant) {
         /*
         Should support:
@@ -62,7 +109,7 @@ public class Ranker {
         return (variant.equals("lnc.ltn") || variant.equals("bnn.bnn") || variant.equals("anc.apc"));
     }
 
-    public double score(IndexDocument doc) {
+    private double tfidfScore(IndexDocument doc) {
         double[] docVector = calculateDocumentVector(doc);
         return dotProduct(docVector, queryVector);
     }
@@ -193,9 +240,5 @@ public class Ranker {
                 assert(false);
                 return null;
         }
-    }
-
-    public static List<Pair<String, Double>> mergeResults(List<List<Pair<String, Double>>> allFacetResults) {
-        return null;
     }
 }
