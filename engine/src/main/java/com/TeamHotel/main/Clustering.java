@@ -29,14 +29,17 @@ public class Clustering {
         int numclusters = 2;
         idx.clearLeaders();
         //int num = idx.getNumDocuments();
-        for (int i = 0; i < numclusters;i++)
-        {
-            int randomNum = RandomUtils.nextInt(0, maxDocuments);
-            Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector = idx.getDocumentVectorByIndex(randomNum);
+        //for (int i = 0; i < numclusters;i++)
+        //{
+            //int randomNum = RandomUtils.nextInt(0, maxDocuments);
+            Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector = idx.getDocumentVectorByIndex(28395);
             System.out.println("clusterId: " + randomDocIdAndVector.get());
             //idx.setDocumentClass(randomDocIdAndVector.get().getKey(), i);
-            idx.addFakeLeader(i + 1, randomDocIdAndVector.get().getValue());
-        }
+            idx.addFakeLeader(1, randomDocIdAndVector.get().getValue());
+            Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector1 = idx.getDocumentVectorByIndex(44146);
+            idx.addFakeLeader(2, randomDocIdAndVector1.get().getValue());
+            System.out.println("clusterId: " + randomDocIdAndVector.get());
+        //}
         updateCluster(idx,maxDocuments );
         idx.clearLeaders();
         System.out.println("Assigning new clusters to each document");
