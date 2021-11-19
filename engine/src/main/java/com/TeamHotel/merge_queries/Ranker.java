@@ -66,6 +66,12 @@ public class Ranker {
         return r;
     }
 
+    private static Ranker jelinekMercerRanker(TreeSet<PostingsList> queryTerms, int corpusSize, double beta) {
+        Ranker r = new Ranker(queryTerms, corpusSize);
+        r.beta = beta;
+        return r;
+    }
+
     public static Collection<IndexDocument> bm25(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
             int corpusSize, int k1, int k2, int k3, double beta) {
         Ranker ranker = bm25Ranker(queryTerms, corpusSize, k1, k2, k3, beta);
@@ -84,6 +90,36 @@ public class Ranker {
             rankings.add(idx, doc);
         });
         return rankings;
+    }
+
+    public static Collection<IndexDocument> jelinekMercer(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
+                                                 int corpusSize, double beta) {
+        Ranker ranker = jelinekMercerRanker(queryTerms, corpusSize, beta);
+        List<IndexDocument> rankings = new LinkedList<>();
+        System.out.printf("Ranking %d documents\n", candidates.size());
+        candidates.forEach(doc -> {
+            double score = ranker.jelinekMercerScore(doc);
+            doc.setFinalScore(score);
+            int idx = 0;
+            for (IndexDocument d: rankings) {
+                if (score > d.getFinalScore()) {
+                    break;
+                }
+                idx++;
+            }
+            rankings.add(idx, doc);
+        });
+        return rankings;
+    }
+
+    private double jelinekMercerScore(IndexDocument doc) {
+        return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
+            double tfd = doc.termFrequency(termPosting.term());
+            //Unsure if this is the term's frequency out of every document in corpus or not
+            double tfq = termPosting.getQueryTermFrequency();
+            double pt = tfq / corpusSize;
+            return ( Math.log(  ( beta * ( ( tfd ) / (doc.getNumTerms() - tfd ) ) ) + (1-beta) * pt ) );
+        })).getSum();
     }
 
     private double bm25Score(IndexDocument doc) {
