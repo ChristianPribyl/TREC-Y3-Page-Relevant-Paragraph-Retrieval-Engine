@@ -15,9 +15,8 @@ public class Ranker {
     private char[] variant;
     private final int corpusSize;
     private double[] queryVector;
-    private int k1;
-    private int k2;
-    private int k3;
+    private double k1;
+    private double k3;
     private double beta;
 
     public Ranker(TreeSet<PostingsList> queryPostings, int corpusSize) {
@@ -57,18 +56,17 @@ public class Ranker {
         return rankings;
     }
 
-    private static Ranker bm25Ranker(TreeSet<PostingsList> queryTerms, int corpusSize, int k1, int k2, int k3, double beta) {
+    private static Ranker bm25Ranker(TreeSet<PostingsList> queryTerms, int corpusSize, double k1, double k3, double beta) {
         Ranker r = new Ranker(queryTerms, corpusSize);
         r.k1 = k1;
-        r.k2 = k2;
         r.k3 = k3;
         r.beta = beta;
         return r;
     }
 
     public static Collection<IndexDocument> bm25(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
-            int corpusSize, int k1, int k2, int k3, double beta) {
-        Ranker ranker = bm25Ranker(queryTerms, corpusSize, k1, k2, k3, beta);
+            int corpusSize, double k1, double k3, double beta) {
+        Ranker ranker = bm25Ranker(queryTerms, corpusSize, k1, k3, beta);
         List<IndexDocument> rankings = new LinkedList<>();
         System.out.printf("Ranking %d documents\n", candidates.size());
         candidates.forEach(doc -> {

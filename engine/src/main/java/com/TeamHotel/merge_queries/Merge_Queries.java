@@ -52,7 +52,7 @@ public class Merge_Queries {
 		return results;
 	}
 
-	public static List<Pair<String, Double>> queryBM25(Index index, Map<String, Integer> queryTerms, int k1, int k2, int k3,
+	public static List<Pair<String, Double>> queryBM25(Index index, Map<String, Integer> queryTerms, double k1, double k3,
 		double beta, FileWriter logfile, int maxResults) {
 			TreeSet<PostingsList> postingsLists = new TreeSet<>((PostingsList l, PostingsList r) -> {
 				if (l.size() > r.size()) return 1;
@@ -77,7 +77,7 @@ public class Merge_Queries {
 			});
 			originalPostings.addAll(postingsLists);
 			List<IndexDocument> matches = merge_OR_query(postingsLists);
-			Collection<IndexDocument> rankings = Ranker.bm25(originalPostings, matches, index.getNumDocuments(), k1, k2, k3, beta);
+			Collection<IndexDocument> rankings = Ranker.bm25(originalPostings, matches, index.getNumDocuments(), k1, k3, beta);
 			ArrayList<Pair<String, Double>> results = new ArrayList<>();
 			int i = 1;
 			for (IndexDocument d : rankings) {

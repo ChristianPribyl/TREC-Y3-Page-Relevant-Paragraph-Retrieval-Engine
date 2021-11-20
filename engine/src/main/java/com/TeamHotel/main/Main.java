@@ -29,6 +29,9 @@ public class Main {
     static final String progName = "ir-engine";
     public static void main(String[] args) throws IOException {
         System.setProperty("file.encoding", "UTF-8");
+        if (args.length == 0) {
+            return;
+        }
         switch (args[0]) {
             case "query-vocab": {
                 if (args.length == 3) {
@@ -328,17 +331,16 @@ public class Main {
                 break;
             }
             case "bm25-cbor-query": {
-                if (args.length == 6) {
+                if (args.length == 8) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String qrelFile = args[3];
                     //final String mergeType = args[3].toUpperCase();
                     //assert (mergeType.equals("AND") || mergeType.equals("OR"));
                     final String filterScored = args[4];
-                    final int k1 = Integer.parseInt(args[5]);
-                    final int k2 = Integer.parseInt(args[6]);
-                    final int k3 = Integer.parseInt(args[7]);
-                    final double alpha = Double.parseDouble(args[8]);
+                    final double k1 = Double.parseDouble(args[5]);
+                    final double k3 = Double.parseDouble(args[6]);
+                    final double alpha = Double.parseDouble(args[7]);
                     // preprocess cbor queries.
                     // execute queries in sequence.
                     final Index idx = Index.load(dbname).get();
@@ -357,7 +359,7 @@ public class Main {
                     toRemove.forEach(qid -> facetedQueries.remove(qid));
 
                     FileWriter logfile = new FileWriter("queryLog.txt");
-                    FileWriter runFile = new FileWriter(String.format("bm25_%d_%d_%d_%0.2f-TeamHotel.run", k1, k2, k3, alpha));
+                    FileWriter runFile = new FileWriter(String.format("bm25_%.2f_%.2f_%.2f-TeamHotel.run", k1, k3, alpha));
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
 
@@ -387,7 +389,7 @@ public class Main {
                                 e.printStackTrace();
                             }
                             System.out.println();
-                            List<Pair<String, Double>> facetResults = Merge_Queries.queryBM25(idx, terms, k1, k2, k3, alpha, logfile, 1000);
+                            List<Pair<String, Double>> facetResults = Merge_Queries.queryBM25(idx, terms, k1, k3, alpha, logfile, 1000);
                             queryResults.get(queryId).add(facetResults);
                             System.out.printf("Facet has %d documents\n", facetResults.size());
                             System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
@@ -429,7 +431,7 @@ public class Main {
                     });
                     runFile.close();
                 } else {
-                    System.out.printf("Usage: %s bm25-cbor-query <index> <cbor-query-file> <qrel> <filter|nofilter> <k1> <k2> <k3> <alpha>\n", progName);
+                    System.out.printf("Usage: %s bm25-cbor-query <index> <cbor-query-file> <qrel> <filter|nofilter> <k1> <k3> <alpha>\n", progName);
                 }
                 break;
             }

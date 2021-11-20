@@ -3,7 +3,6 @@ package com.TeamHotel.inverindex;
 import com.TeamHotel.main.WordSimilarity;
 import com.TeamHotel.preprocessor.Preprocess;
 
-import org.apache.commons.lang3.Validate;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
 import org.jetbrains.annotations.NotNull;
@@ -12,15 +11,12 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
-
 
 public class Index implements Serializable{
     private final Connection connection;
@@ -83,6 +79,7 @@ public class Index implements Serializable{
     public static Optional<Index> load(@NotNull final String dbname) {
         try {
             Index idx = new Index(dbname, false);
+            IndexDocument.index = idx;
             return Optional.of(idx);
         } catch (Exception ex) {
             ex.printStackTrace();
