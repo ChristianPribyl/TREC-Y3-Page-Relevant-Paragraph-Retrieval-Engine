@@ -562,7 +562,7 @@ public class Main {
                 }
                 break;
             }case "bim": {
-                if (args.length == 3) {
+                if (args.length == 5) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String qrelFile = args[3];
