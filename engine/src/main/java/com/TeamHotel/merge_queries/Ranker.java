@@ -64,6 +64,12 @@ public class Ranker {
         return r;
     }
 
+    private static Ranker jelinekMercerRanker(TreeSet<PostingsList> queryTerms, int corpusSize, double beta) {
+        Ranker r = new Ranker(queryTerms, corpusSize);
+        r.beta = beta;
+        return r;
+    }
+
     public static Collection<IndexDocument> bm25(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
             int corpusSize, double k1, double k3, double beta) {
         Ranker ranker = bm25Ranker(queryTerms, corpusSize, k1, k3, beta);
@@ -84,6 +90,36 @@ public class Ranker {
         return rankings;
     }
 
+    public static Collection<IndexDocument> jelinekMercer(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
+                                                 int corpusSize, double beta) {
+        Ranker ranker = jelinekMercerRanker(queryTerms, corpusSize, beta);
+        List<IndexDocument> rankings = new LinkedList<>();
+        System.out.printf("Ranking %d documents\n", candidates.size());
+        candidates.forEach(doc -> {
+            double score = ranker.jelinekMercerScore(doc);
+            doc.setFinalScore(score);
+            int idx = 0;
+            for (IndexDocument d: rankings) {
+                if (score > d.getFinalScore()) {
+                    break;
+                }
+                idx++;
+            }
+            rankings.add(idx, doc);
+        });
+        return rankings;
+    }
+
+    private double jelinekMercerScore(IndexDocument doc) {
+        return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
+            double tfd = doc.termFrequency(termPosting.term());
+            //Unsure if this is the term's frequency out of every document in corpus or not
+            double tfq = termPosting.getQueryTermFrequency();
+            double pt = tfq / corpusSize;
+            return ( Math.log(  ( beta * ( ( tfd ) / (doc.getNumTerms() - tfd ) ) ) + (1-beta) * pt ) );
+        })).getSum();
+    }
+
     private double bm25Score(IndexDocument doc) {
         double L = (1 - beta) + (beta * doc.getNumTerms());
         return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
@@ -95,6 +131,51 @@ public class Ranker {
             / (((k1 * L) + tfd)
               * (k3 + tfq)));
         })).getSum();
+    }
+
+    public static Collection<IndexDocument> bim(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
+    int corpusSize) {
+        Ranker r = new Ranker(queryTerms, corpusSize);
+        List<IndexDocument> rankings = new LinkedList<>();
+        System.out.printf("Ranking %d documents\n", candidates.size());
+        candidates.forEach(doc -> {
+            double score = r.bimScore(doc);
+            doc.setFinalScore(score);
+            int idx = 0;
+            for (IndexDocument d: rankings) {
+                if (score > d.getFinalScore()) {
+                    break;
+                }
+                idx++;
+            }
+            rankings.add(idx, doc);
+        });
+        return rankings;
+    }
+    private double bimScore(IndexDocument doc) {
+        return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
+            double N = corpusSize + 2;
+            double ct = 0.0;
+            if (doc.termFrequency(termPosting.term()) > 0.0) {
+                double nt = termPosting.size() + 1;
+                ct = calCT(N,nt);
+            }
+            return ct;
+
+        })).getSum();
+        
+        
+    }
+
+    public static double calCT(double N, double nt)
+    {
+        // ct: log (pt + lap) - log (1-pt + lap) - log(nt - pt + lap) + log(N - nt - 1 + pt + lap) from book 
+        double ct = 0.0;
+        //ct = Math.log(pt + lapace) + Math.log((1-ut) + lapace) - Math.log(ut+lapace) - Math.log((1-pt)+ lapace);
+        //ct = Math.log(pt + lapace) - Math.log((1-pt) + lapace) - Math.log(nt - pt + lapace) + Math.log((N - nt - 1 + pt) + lapace);
+        //ct = Math.log((((pt * (1-ut) ) + 1) / ((ut * (1-pt)) + lapace) ));
+        ct = Math.log((N - nt)/ nt);
+        return ct;
     }
 
     private static boolean validateVariant(@NotNull String variant) {

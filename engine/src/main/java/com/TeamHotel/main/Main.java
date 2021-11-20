@@ -435,6 +435,112 @@ public class Main {
                 }
                 break;
             }
+            case "jelinekMercerCborQuery": {
+                //Check is args.length equality is correct
+                if (args.length == 6) {
+                    final String dbname = args[1];
+                    final String cborQueryFile = args[2];
+                    final String qrelFile = args[3];
+                    //final String mergeType = args[3].toUpperCase();
+                    //assert (mergeType.equals("AND") || mergeType.equals("OR"));
+                    final String filterScored = args[4];
+                    final double beta = Double.parseDouble(args[5]);
+                    // preprocess cbor queries.
+                    // execute queries in sequence.
+                    final Index idx = Index.load(dbname).get();
+
+                    final Map<String, Set<String>> qrelDocs = Preprocess.getScoredQrelDocs(qrelFile).get();
+
+                    final Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
+
+                    // remove queries without qrel evaluation data
+                    final List<String> toRemove = new LinkedList<>();
+                    facetedQueries.keySet().forEach(qid -> {
+                        if (!qrelDocs.keySet().contains(qid)) {
+                            toRemove.add(qid);
+                        }
+                    });
+                    toRemove.forEach(qid -> facetedQueries.remove(qid));
+
+                    FileWriter logfile = new FileWriter("queryLog.txt");
+
+                    //Check Proper Formating for runFile**************************
+                    FileWriter runFile = new FileWriter(String.format("bm25_%d_%d_%d_%0.2f-TeamHotel.run", beta));
+
+                    Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
+
+                    //Map<String, List<List<String>>> lessQueries = new HashMap<>(5);
+                    //facetedQueries.entrySet().stream().collect(Collectors.toList()).subList(0, 1).forEach(e -> lessQueries.put(e.getKey(), e.getValue()));
+                    //lessQueries.forEach((queryId, facets) -> {
+                    facetedQueries.forEach((queryId, facets) -> {
+                        queryResults.put(queryId, new ArrayList<>(facets.size()));
+                        facets.forEach(facet -> {
+                            Map<String, Integer> terms = new HashMap<>();
+                            facet.stream().forEach((String t) -> {
+                                Integer prev = terms.put(t, 1);
+                                if (prev != null) {
+                                    terms.put(t, prev + 1);
+                                }
+                            });
+                            try {
+                                logfile.write(String.format("Querying Facet of %s with terms: ", queryId));
+                                facet.forEach(w -> {
+                                    try {
+                                        logfile.write(String.format(" %s", w));
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                });
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                            System.out.println();
+                            List<Pair<String, Double>> facetResults = Merge_Queries.queryJelinekMercer(idx, terms, beta, logfile, 1000);
+                            queryResults.get(queryId).add(facetResults);
+                            System.out.printf("Facet has %d documents\n", facetResults.size());
+                            System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
+                        });
+                    });
+
+                    final String modelName = "jelinekMercer";
+                    final String teamName = "TeamHotel";
+
+                    Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
+                    queryResults.forEach((qid, facets) -> {
+                        System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                        List<Pair<String, Double>> result;
+                        if (filterScored.toLowerCase().equals("filter")) {
+                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                        }
+                        else {
+                            result = Merge_Queries.mergeFacets(facets, 20);
+                        }
+                        System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                        finalResults.put(qid, result);
+                    });
+
+                    System.err.printf("Final results contains results for %d queries\n", finalResults.size());
+
+                    AtomicInteger i = new AtomicInteger(1);
+                    finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
+                        i.set(1);
+                        results.forEach((Pair<String, Double> p) -> {
+                            final String docid = p.getLeft();
+                            final Double score = p.getRight();
+                            try {
+                                runFile.write(String.format("%s Q0 %s %d %f %s-%s\n", qid, docid, i.getAndIncrement(), score, teamName, modelName));
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
+                            //$queryId Q0 $paragraphId $rank $score $teamName-$methodName
+                        });
+                    });
+                    runFile.close();
+                } else {
+                    System.out.printf("Usage: %s bm25-cbor-query <index> <cbor-query-file> <qrel> <filter|nofilter> <k1> <k2> <k3> <alpha>\n", progName);
+                }
+                break;
+            }
             case "query-ids": {
                 if (args.length == 2) {
                     final String queryFile = args[1];
@@ -455,6 +561,107 @@ public class Main {
                     idx.commitTransaction();
                 }
                 break;
+            }case "bim": {
+                if (args.length == 3) {
+                    final String dbname = args[1];
+                    final String cborQueryFile = args[2];
+                    final String qrelFile = args[3];
+                    //final String mergeType = args[3].toUpperCase();
+                    //assert (mergeType.equals("AND") || mergeType.equals("OR"));
+                    final String filterScored = args[4];
+                    // preprocess cbor queries.
+                    // execute queries in sequence.
+                    final Index idx = Index.load(dbname).get();
+
+                    final Map<String, Set<String>> qrelDocs = Preprocess.getScoredQrelDocs(qrelFile).get();
+
+                    final Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
+
+                    // remove queries without qrel evaluation data
+                    final List<String> toRemove = new LinkedList<>();
+                    facetedQueries.keySet().forEach(qid -> {
+                        if (!qrelDocs.keySet().contains(qid)) {
+                            toRemove.add(qid);
+                        }
+                    });
+                    toRemove.forEach(qid -> facetedQueries.remove(qid));
+
+                    FileWriter logfile = new FileWriter("queryLog.txt");
+                    FileWriter runFile = new FileWriter(String.format("bim-TeamHotel.run"));
+
+                    Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
+
+                    //Map<String, List<List<String>>> lessQueries = new HashMap<>(5);
+                    //facetedQueries.entrySet().stream().collect(Collectors.toList()).subList(0, 1).forEach(e -> lessQueries.put(e.getKey(), e.getValue()));
+                    //lessQueries.forEach((queryId, facets) -> {
+                    facetedQueries.forEach((queryId, facets) -> {
+                        queryResults.put(queryId, new ArrayList<>(facets.size()));
+                        facets.forEach(facet -> {
+                            Map<String, Integer> terms = new HashMap<>();
+                            facet.stream().forEach((String t) -> {
+                                Integer prev = terms.put(t, 1);
+                                if (prev != null) {
+                                    terms.put(t, prev + 1);
+                                }
+                            });
+                            try {
+                                logfile.write(String.format("Querying Facet of %s with terms: ", queryId));
+                                facet.forEach(w -> {
+                                    try {
+                                        logfile.write(String.format(" %s", w));
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                });
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                            System.out.println();
+                            List<Pair<String, Double>> facetResults = Merge_Queries.queryBIM(idx, terms, logfile, 1000);
+                            queryResults.get(queryId).add(facetResults);
+                            System.out.printf("Facet has %d documents\n", facetResults.size());
+                            System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
+                        });
+                    });
+
+                    final String modelName = "bim";
+                    final String teamName = "TeamHotel";
+
+                    Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
+                    queryResults.forEach((qid, facets) -> {
+                        System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                        List<Pair<String, Double>> result;
+                        if (filterScored.toLowerCase().equals("filter")) {
+                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                        }
+                        else {
+                            result = Merge_Queries.mergeFacets(facets, 20);
+                        }
+                        System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                        finalResults.put(qid, result);
+                    });
+
+                    System.err.printf("Final results contains results for %d queries\n", finalResults.size());
+
+                    AtomicInteger i = new AtomicInteger(1);
+                    finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
+                        i.set(1);
+                        results.forEach((Pair<String, Double> p) -> {
+                            final String docid = p.getLeft();
+                            final Double score = p.getRight();
+                            try {
+                                runFile.write(String.format("%s Q0 %s %d %f %s-%s\n", qid, docid, i.getAndIncrement(), score, teamName, modelName));
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
+                            //$queryId Q0 $paragraphId $rank $score $teamName-$methodName
+                        });
+                    });
+                    runFile.close();
+                } else {
+                    System.out.printf("Usage: %s bm25-cbor-query <index> <cbor-query-file> <qrel> <filter|nofilter> <k1> <k2> <k3> <alpha>\n", progName);
+                }
+
             }
             default:
             System.out.printf("Usage: %s [query-vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query | make-postings | reset-postings]\n" +
