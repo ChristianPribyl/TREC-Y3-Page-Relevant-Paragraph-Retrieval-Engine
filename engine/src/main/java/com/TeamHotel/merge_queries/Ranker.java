@@ -134,12 +134,13 @@ public class Ranker {
     }
 
     public static Collection<IndexDocument> bim(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
-    int corpusSize) {
+    int corpusSize, double a, double b) {
         Ranker r = new Ranker(queryTerms, corpusSize);
+     
         List<IndexDocument> rankings = new LinkedList<>();
         System.out.printf("Ranking %d documents\n", candidates.size());
         candidates.forEach(doc -> {
-            double score = r.bimScore(doc);
+            double score = r.bimScore(doc,a,b);
             doc.setFinalScore(score);
             int idx = 0;
             for (IndexDocument d: rankings) {
@@ -152,12 +153,12 @@ public class Ranker {
         });
         return rankings;
     }
-    private double bimScore(IndexDocument doc) {
+    private double bimScore(IndexDocument doc, double a, double b) {
         return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
-            double N = corpusSize + 2;
+            double N = corpusSize + b;
             double ct = 0.0;
             if (doc.termFrequency(termPosting.term()) > 0.0) {
-                double nt = termPosting.size() + 1;
+                double nt = termPosting.size() + a;
                 ct = calCT(N,nt);
             }
             return ct;
