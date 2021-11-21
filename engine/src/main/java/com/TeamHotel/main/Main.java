@@ -465,7 +465,7 @@ public class Main {
                     FileWriter logfile = new FileWriter("queryLog.txt");
 
                     //Check Proper Formating for runFile**************************
-                    FileWriter runFile = new FileWriter(String.format("bm25_%d_%d_%d_%0.2f-TeamHotel.run", beta));
+                    FileWriter runFile = new FileWriter(String.format("jelinekMercer_%.2f-TeamHotel.run", beta));
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
 
@@ -659,8 +659,9 @@ public class Main {
                     });
                     runFile.close();
                 } else {
-                    System.out.printf("Usage: %s bm25-cbor-query <index> <cbor-query-file> <qrel> <filter|nofilter> <k1> <k2> <k3> <alpha>\n", progName);
+                    System.out.printf("Usage: %s bim <index> <cbor-query-file> <qrel> <filter|nofilter>\n", progName);
                 }
+                break;
 
             }
             default:
