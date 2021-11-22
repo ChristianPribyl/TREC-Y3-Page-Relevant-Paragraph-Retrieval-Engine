@@ -1,0 +1,1 @@
+./trec_eval -q -m $2 ./trec_pages.qrel $1 | head -n -1 | awk '{ print $3 }' | python stats.py
