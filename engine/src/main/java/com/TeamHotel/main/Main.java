@@ -210,7 +210,6 @@ public class Main {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final int resultsPerQuery = 20;
-
                     // generate list of queries
                     // facetedQueries = Map<queryid, List<queryFacets>>
                     // queryFacet = List<queryTerms>
@@ -235,7 +234,7 @@ public class Main {
                         AtomicInteger i = new AtomicInteger();
                         finalResult.forEach(p -> {
                             try {
-                                outFile.write(String.format("%s Q0 %s %d %f TeamHotel-%s", queryID, p.getLeft(), i, p.getRight(), "WordSimilarity"));
+                                outFile.write(String.format("%s Q0 %s %d %f TeamHotel-%s\n", queryID, p.getLeft(), i.get(), p.getRight(), "WordSimilarity"));
                             } catch (IOException ex) {
                                 ex.printStackTrace();
                             }
@@ -562,14 +561,18 @@ public class Main {
                 }
                 break;
             }case "bim": {
-                if (args.length == 6) {
+                if (args.length == 5) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String qrelFile = args[3];
                     //final String mergeType = args[3].toUpperCase();
                     //assert (mergeType.equals("AND") || mergeType.equals("OR"));
                     final String filterScored = args[4];
-                    final String smoothing = args[5]; // l or j
+                    //final String smoothing = args[5]; // l or j
+                    final double a = 1;
+			        final double b = 2;
+  
+                    
                     // preprocess cbor queries.
                     // execute queries in sequence.
                     final Index idx = Index.load(dbname).get();
@@ -618,7 +621,7 @@ public class Main {
                                 e.printStackTrace();
                             }
                             System.out.println();
-                            List<Pair<String, Double>> facetResults = Merge_Queries.queryBIM(idx, terms,smoothing, logfile, 1000);
+                            List<Pair<String, Double>> facetResults = Merge_Queries.queryBIM(idx, terms, a, b, logfile, 1000);
                             queryResults.get(queryId).add(facetResults);
                             System.out.printf("Facet has %d documents\n", facetResults.size());
                             System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
@@ -651,7 +654,7 @@ public class Main {
                             final String docid = p.getLeft();
                             final Double score = p.getRight();
                             try {
-                                runFile.write(String.format("%s Q0 %s %d %f %s-%s-%s\n", qid, docid, i.getAndIncrement(), score, teamName, modelName,smoothing));
+                                runFile.write(String.format("%s Q0 %s %d %f %s-%s\n", qid, docid, i.getAndIncrement(), score, teamName, modelName));
                             } catch (IOException ex) {
                                 ex.printStackTrace();
                             }
