@@ -5,6 +5,8 @@ import com.TeamHotel.inverindex.*;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
@@ -19,14 +21,14 @@ public class Merge_Queries {
 			else return l.term().compareTo(r.term());
 		});
 		Map<String, IndexDocument> documents = new TreeMap<>();
-		System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
+		//System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
 		queryTerms.forEach((term, num) -> {
 			Optional<PostingsList> postings = index.getPostingsListForQuery(term, documents);
 			if (postings.isPresent()) {
-				System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
+				//System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
 				postingsLists.add(postings.get());
 			} else {
-				System.err.printf("Term %s has no postings\n", term);
+				//System.err.printf("Term %s has no postings\n", term);
 			}
 		});
 		final TreeSet<PostingsList> originalPostings = new TreeSet<>((PostingsList l, PostingsList r) -> {
@@ -60,14 +62,14 @@ public class Merge_Queries {
 			else return l.term().compareTo(r.term());
 		});
 		Map<String, IndexDocument> documents = new TreeMap<>();
-		System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
+		//System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
 		queryTerms.forEach((term, num) -> {
 			Optional<PostingsList> postings = index.getPostingsListForQuery(term, documents);
 			if (postings.isPresent()) {
-				System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
+				//System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
 				postingsLists.add(postings.get());
 			} else {
-				System.err.printf("Term %s has no postings\n", term);
+				//System.err.printf("Term %s has no postings\n", term);
 			}
 		});
 		final TreeSet<PostingsList> originalPostings = new TreeSet<>((PostingsList l, PostingsList r) -> {
@@ -100,14 +102,14 @@ public class Merge_Queries {
 				else return l.term().compareTo(r.term());
 			});
 			Map<String, IndexDocument> documents = new TreeMap<>();
-			System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
+			//System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
 			queryTerms.forEach((term, num) -> {
 				Optional<PostingsList> postings = index.getPostingsListForQuery(term, documents);
 				if (postings.isPresent()) {
-					System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
+					//System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
 					postingsLists.add(postings.get());
 				} else {
-					System.err.printf("Term %s has no postings\n", term);
+					//System.err.printf("Term %s has no postings\n", term);
 				}
 			});
 			final TreeSet<PostingsList> originalPostings = new TreeSet<>((PostingsList l, PostingsList r) -> {
@@ -140,14 +142,14 @@ public class Merge_Queries {
 				else return l.term().compareTo(r.term());
 			});
 			Map<String, IndexDocument> documents = new TreeMap<>();
-			System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
+			//System.err.printf("Getting postings lists for %d terms\n", queryTerms.size());
 			queryTerms.forEach((term, num) -> {
 				Optional<PostingsList> postings = index.getPostingsListForQuery(term, documents);
 				if (postings.isPresent()) {
-					System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
+					//System.err.printf("Postings for %s has length %d\n", term, postings.get().size());
 					postingsLists.add(postings.get());
 				} else {
-					System.err.printf("Term %s has no postings\n", term);
+					//System.err.printf("Term %s has no postings\n", term);
 				}
 			});
 			final TreeSet<PostingsList> originalPostings = new TreeSet<>((PostingsList l, PostingsList r) -> {
@@ -188,7 +190,101 @@ public class Merge_Queries {
 		return result.documents();
 	}
 
-	public static List<Pair<String, Double>> mergeFacets(List<List<Pair<String, Double>>> facets, final int maxResults) {
+	public static List<Pair<String, Double>> mergeFacets(List<List<Pair<String, Double>>> facets, final String mergeType, final int maxResults) {
+		if (mergeType.equalsIgnoreCase("RoundRobin")) {
+			return mergeRoundRobin(facets, maxResults);
+		} else if (mergeType.equalsIgnoreCase("RankRecurrance")) {
+			return mergeWeighRecurringResults(facets, maxResults);
+		} else if (mergeType.equalsIgnoreCase("Recurrance")) {
+			return mergeRoundRobin(facets, maxResults);
+		} else {
+			return null;
+		}
+	}
+
+	public static List<Pair<String, Double>> mergeRoundRobin(List<List<Pair<String, Double>>> facets, final int maxResults) {
+		//List<Pair<String, Double>> results = new ArrayList<>(maxResults);
+		Map<String, Double> results = new TreeMap<>();
+
+		List<Iterator<Pair<String, Double>>> its = new LinkedList<>();
+		for (List<Pair<String, Double>> facet: facets) {
+			its.add(facet.iterator());
+		}
+		AtomicInteger i = new AtomicInteger(0);
+		AtomicBoolean more = new AtomicBoolean(true);
+		while (results.size() < maxResults && more.get()) {
+			more.set(false);
+			its.forEach(it -> {
+				if(it.hasNext() && results.size() < maxResults) {
+					Pair<String, Double> doc = it.next();
+					if (results.get(doc.getLeft()) == null) {
+						results.put(doc.getLeft(), 1.0 * maxResults - i.getAndIncrement());
+					}
+					more.set(true);
+				}
+			});
+		}
+		return results.entrySet().stream()
+			.sorted((l, r) -> -Double.compare(l.getValue(), r.getValue()))
+			.limit(maxResults)
+			.map(e -> Pair.of(e.getKey(), e.getValue()))
+			.collect(Collectors.toList());
+	}
+
+	// each facet result is scored as 1/rank.  Ranks are summed across all documents then sorted.
+	public static List<Pair<String, Double>> mergeWeighRecurringResults(List<List<Pair<String, Double>>> facets, final int maxResults) {
+		Map<String, Double> results = new TreeMap<>();
+		combineScoresAndSetToRank(facets, maxResults).stream().flatMap(facet -> facet.stream())
+		.map(doc -> Pair.of(doc.getLeft(), 1.0 / doc.getRight()))
+		.forEach(doc -> {
+			Double previousVal = results.putIfAbsent(doc.getLeft(), doc.getRight());
+			if (previousVal != null) {
+				results.put(doc.getLeft(), doc.getRight() + previousVal);
+			}
+		});
+		
+		return results.entrySet().stream()
+			.sorted((Map.Entry<String, Double> l, Map.Entry<String, Double> r) -> -Double.compare(l.getValue(), r.getValue()))
+			.limit(maxResults)
+			.map(e -> Pair.of(e.getKey(), e.getValue()))
+			.collect(Collectors.toList());
+	}
+
+	// sort results by the number of facets that return each document.
+	// Break ties by favoring the document that appears soonest in its facets rankings.
+	public static List<Pair<String, Double>> mergeByRecurrance(List<List<Pair<String, Double>>> facets, final int maxResults) {
+		Map<String, Double> results = new TreeMap<>();
+		combineScoresAndSetToRank(facets, maxResults).stream().flatMap(facet -> facet.stream())
+		.forEach(doc -> {
+			Double previousVal = results.get(doc.getLeft());
+			if (previousVal == null) {
+				results.put(doc.getLeft(), 1 + doc.getRight());
+			} else if (doc.getRight() > previousVal % 1.0) {
+				results.put(doc.getLeft(), 1 + (previousVal % 1.0) + doc.getRight());
+			} else {
+				results.put(doc.getLeft(), 1 + previousVal);
+			}
+		});
+		
+		return results.entrySet().stream()
+			.sorted((Map.Entry<String, Double> l, Map.Entry<String, Double> r) -> -Double.compare(l.getValue(), r.getValue()))
+			.limit(maxResults)
+			.map(e -> Pair.of(e.getKey(), e.getValue()))
+			.collect(Collectors.toList());
+	}
+
+	private static List<List<Pair<String, Double>>> combineScoresAndSetToRank(List<List<Pair<String, Double>>> facets, final int maxResults) {
+		for (List<Pair<String, Double>> facet: facets) {
+			int index = 1;
+			for (Pair<String, Double> doc: facet) {
+				doc.setValue(1.0 / index);
+				index++;
+			}
+		}
+		return facets;
+	}
+
+	public static List<Pair<String, Double>> mergeWeightingIncomperableScores(List<List<Pair<String, Double>>> facets, final int maxResults) {
 		Map<String, Double> results = new TreeMap<>();
 	
 		for (List<Pair<String, Double>> facet: facets) {

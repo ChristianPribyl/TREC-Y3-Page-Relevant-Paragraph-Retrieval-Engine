@@ -81,7 +81,7 @@ public class Preprocess {
             if (word.contains("?")) {
                 System.err.printf("%s contains ?\n", word);
             }
-            System.out.println(word);
+            //System.out.println(word);
         });
     }
 
@@ -151,9 +151,9 @@ public class Preprocess {
         ids = new AtomicInteger(0);
         numProcessed = new AtomicInteger(0);
         int numThreads = 6;
-        System.err.println("Preprocessing a large cbor file");
+        //System.err.println("Preprocessing a large cbor file");
         final Set<String> stopWords = loadStopWords();
-        System.err.println("Stopwords loaded");
+        //System.err.println("Stopwords loaded");
         final ConcurrentHashMap<String, ConcurrentHashMap<String, Integer>> documents = new ConcurrentHashMap<>(40000000);
         Thread[] threads = new Thread[numThreads];
         int[] progress = new int[numThreads];
@@ -161,7 +161,7 @@ public class Preprocess {
         Iterator<Data.Paragraph> documentIterator;
         try {
             final FileInputStream documentStream  = new FileInputStream(cborFile);
-            System.err.println("file opened");
+            //System.err.println("file opened");
             documentIterator = DeserializeData.iterParagraphs(documentStream);
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -214,7 +214,7 @@ public class Preprocess {
                         progress[tid]++;
                         int totalDone = numProcessed.incrementAndGet();
                         if (totalDone % 20000 == 0) {
-                            System.out.printf("Processed %d documents\n", totalDone);
+                            //System.out.printf("Processed %d documents\n", totalDone);
                         }
                         if (totalDone % 100000 == 0) {
                             System.gc();
@@ -223,7 +223,7 @@ public class Preprocess {
                             break;
                         }
                     }
-                    System.err.printf("Thread %d done!  It processed %d documents\n", tid, progress[tid]);
+                    //System.err.printf("Thread %d done!  It processed %d documents\n", tid, progress[tid]);
                 }
             }));
             threads[i].start();
@@ -372,7 +372,7 @@ public class Preprocess {
                         progress[tid]++;
                         int totalDone = numProcessed.incrementAndGet();
                         if (totalDone % 20000 == 0) {
-                            System.out.printf("Processed %d documents\n", totalDone);
+                            //System.out.printf("Processed %d documents\n", totalDone);
                         }
                         if (totalDone % 100000 == 0) {
                             System.gc();
@@ -381,7 +381,7 @@ public class Preprocess {
                             break;
                         }
                     }
-                    System.err.printf("Thread %d done!  It processed %d documents\n", tid, progress[tid]);
+                    //System.err.printf("Thread %d done!  It processed %d documents\n", tid, progress[tid]);
                 }
             }));
             threads[i].start();
@@ -403,7 +403,7 @@ public class Preprocess {
         Iterator<Data.Paragraph> documentIterator;
         try {
             final FileInputStream documentStream  = new FileInputStream(cborFile);
-            System.err.println("file opened");
+            //System.err.println("file opened");
             documentIterator = DeserializeData.iterParagraphs(documentStream);
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -434,7 +434,7 @@ public class Preprocess {
             .collect(Collectors.toSet());
             vocab.addAll(uniqueTerms);
             if ((i+1) % 20000 == 0) {
-                System.err.printf("Parsed %d documents\n", i+1);
+                //System.err.printf("Parsed %d documents\n", i+1);
             }
         }
 
@@ -512,7 +512,7 @@ public class Preprocess {
                 final String qid = lineSc.next();
                 lineSc.next();
                 final String docId = lineSc.next();
-                System.out.printf("qid %s doc %s\n", qid, docId);
+                //System.out.printf("qid %s doc %s\n", qid, docId);
                 scoredDocs.putIfAbsent(qid, new HashSet<>());
                 scoredDocs.get(qid).add(docId);
             }

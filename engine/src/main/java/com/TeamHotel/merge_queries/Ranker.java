@@ -40,7 +40,7 @@ public class Ranker {
         assert(validateVariant(variant));
         Ranker ranker = tfidfRanker(variant, queryTerms, corpusSize);
         List<IndexDocument> rankings = new LinkedList<>();
-        System.out.printf("Ranking %d documents\n", candidates.size());
+        //System.out.printf("Ranking %d documents\n", candidates.size());
         candidates.forEach(doc -> {
             double score = ranker.tfidfScore(doc);
             doc.setFinalScore(score);
@@ -74,7 +74,7 @@ public class Ranker {
             int corpusSize, double k1, double k3, double beta) {
         Ranker ranker = bm25Ranker(queryTerms, corpusSize, k1, k3, beta);
         List<IndexDocument> rankings = new LinkedList<>();
-        System.out.printf("Ranking %d documents\n", candidates.size());
+        //System.out.printf("Ranking %d documents\n", candidates.size());
         candidates.forEach(doc -> {
             double score = ranker.bm25Score(doc);
             doc.setFinalScore(score);
@@ -94,7 +94,7 @@ public class Ranker {
                                                  int corpusSize, double beta) {
         Ranker ranker = jelinekMercerRanker(queryTerms, corpusSize, beta);
         List<IndexDocument> rankings = new LinkedList<>();
-        System.out.printf("Ranking %d documents\n", candidates.size());
+        //System.out.printf("Ranking %d documents\n", candidates.size());
         candidates.forEach(doc -> {
             double score = ranker.jelinekMercerScore(doc);
             doc.setFinalScore(score);
@@ -137,7 +137,7 @@ public class Ranker {
     int corpusSize) {
         Ranker r = new Ranker(queryTerms, corpusSize);
         List<IndexDocument> rankings = new LinkedList<>();
-        System.out.printf("Ranking %d documents\n", candidates.size());
+        //System.out.printf("Ranking %d documents\n", candidates.size());
         candidates.forEach(doc -> {
             double score = r.bimScore(doc);
             doc.setFinalScore(score);

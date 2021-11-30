@@ -206,9 +206,11 @@ public class Main {
                 break;
             }
             case "cluster-cbor-query": {
-                if (args.length == 3) {
+                if (args.length == 5) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
+                    final String facetMergeType = args[3];
+                    final String runfile = args[4];
                     final int resultsPerQuery = 20;
 
                     // generate list of queries
@@ -221,7 +223,8 @@ public class Main {
 
                     Index idx = Index.load(dbname).get();
 
-                    FileWriter outFile = new FileWriter(String.format("WordSimilarity+Clustering-Y3.run"));
+                    //FileWriter outFile = new FileWriter(String.format("WordSimilarity+Clustering-Y3.run"));
+                    FileWriter outFile = new FileWriter(runfile);
 
                     facetedQueries.forEach((queryID, facets) -> {
                         final List<List<Pair<String, Double>>> allFacetResults = new LinkedList<>();
@@ -230,7 +233,7 @@ public class Main {
                             final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet, resultsPerQuery);
                             allFacetResults.add(facetResults);
                         });
-                        final List<Pair<String, Double>> finalResult = Merge_Queries.mergeFacets(allFacetResults, 20);
+                        final List<Pair<String, Double>> finalResult = Merge_Queries.mergeFacets(allFacetResults, facetMergeType, 20);
 
                         AtomicInteger i = new AtomicInteger();
                         finalResult.forEach(p -> {
@@ -249,19 +252,22 @@ public class Main {
                 break;
             }
             case "tfidf-cbor-query": {
-                if (args.length == 6) {
+                if (args.length == 8) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String qrelFile = args[3];
                     final String tfidfVariant = args[4];
                     final String filterScored = args[5];
+                    final String mergeType = args[6];
+                    final String runfileName = args[7];
 
                     final Index idx = Index.load(dbname).get();
                     final Map<String, Set<String>> qrelDocs = Preprocess.getScoredQrelDocs(qrelFile).get();
                     final Map<String, List<List<String>>> facetedQueries = getFacetedQueries(cborQueryFile, qrelFile);
                     final String modelName = "tfidf_atc.btc";
                     FileWriter logfile = new FileWriter("queryLog.txt", true);
-                    FileWriter runFile = new FileWriter(String.format("tfidf-%s-TeamHotel.run", tfidfVariant.replace('.', '_')));
+                    //FileWriter runFile = new FileWriter(String.format("tfidf-%s-TeamHotel.run", tfidfVariant.replace('.', '_')));
+                    FileWriter runFile = new FileWriter(runfileName);
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
                     facetedQueries.forEach((queryId, facets) -> {
@@ -286,29 +292,29 @@ public class Main {
                             } catch (IOException e) {
                                 e.printStackTrace();
                             }
-                            System.out.println();
+                            //System.out.println();
                             List<Pair<String, Double>> facetResults = Merge_Queries.queryTfidf(idx, terms, tfidfVariant, logfile, 1000);
                             queryResults.get(queryId).add(facetResults);
-                            System.out.printf("Facet has %d documents\n", facetResults.size());
-                            System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
+                            //System.out.printf("Facet has %d documents\n", facetResults.size());
+                            //System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
                         });
                     });
 
                     Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
                     queryResults.forEach((qid, facets) -> {
-                        System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                        //System.err.printf("qid %s has %d facets\n", qid, facets.size());
                         List<Pair<String, Double>> result;
                         if (filterScored.toLowerCase().equals("filter")) {
-                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, mergeType, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
                         }
                         else {
-                            result = Merge_Queries.mergeFacets(facets, 20);
+                            result = Merge_Queries.mergeFacets(facets, mergeType, 20);
                         }
-                        System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                        //System.err.printf("merging them together we get %d ranked documents\n", result.size());
                         finalResults.put(qid, result);
                     });
 
-                    System.err.printf("Final results contains results for %d queries\n", finalResults.size());
+                    //System.err.printf("Final results contains results for %d queries\n", finalResults.size());
 
                     AtomicInteger i = new AtomicInteger(1);
                     finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
@@ -331,7 +337,7 @@ public class Main {
                 break;
             }
             case "bm25-cbor-query": {
-                if (args.length == 8) {
+                if (args.length == 10) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String qrelFile = args[3];
@@ -341,6 +347,8 @@ public class Main {
                     final double k1 = Double.parseDouble(args[5]);
                     final double k3 = Double.parseDouble(args[6]);
                     final double alpha = Double.parseDouble(args[7]);
+                    final String mergeType = args[8];
+                    final String runfileName = args[9];
                     // preprocess cbor queries.
                     // execute queries in sequence.
                     final Index idx = Index.load(dbname).get();
@@ -359,7 +367,8 @@ public class Main {
                     toRemove.forEach(qid -> facetedQueries.remove(qid));
 
                     FileWriter logfile = new FileWriter("queryLog.txt");
-                    FileWriter runFile = new FileWriter(String.format("bm25_%.2f_%.2f_%.2f-TeamHotel.run", k1, k3, alpha));
+                    //FileWriter runFile = new FileWriter(String.format("bm25_%.2f_%.2f_%.2f-TeamHotel.run", k1, k3, alpha));
+                    FileWriter runFile = new FileWriter(runfileName);
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
 
@@ -388,11 +397,11 @@ public class Main {
                             } catch (IOException e) {
                                 e.printStackTrace();
                             }
-                            System.out.println();
+                            //System.out.println();
                             List<Pair<String, Double>> facetResults = Merge_Queries.queryBM25(idx, terms, k1, k3, alpha, logfile, 1000);
                             queryResults.get(queryId).add(facetResults);
-                            System.out.printf("Facet has %d documents\n", facetResults.size());
-                            System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
+                            //System.out.printf("Facet has %d documents\n", facetResults.size());
+                            //System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
                         });
                     });
 
@@ -401,19 +410,19 @@ public class Main {
 
                     Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
                     queryResults.forEach((qid, facets) -> {
-                        System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                        //System.err.printf("qid %s has %d facets\n", qid, facets.size());
                         List<Pair<String, Double>> result;
                         if (filterScored.toLowerCase().equals("filter")) {
-                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, mergeType, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
                         }
                         else {
-                            result = Merge_Queries.mergeFacets(facets, 20);
+                            result = Merge_Queries.mergeFacets(facets, mergeType, 20);
                         }
-                        System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                        //System.err.printf("merging them together we get %d ranked documents\n", result.size());
                         finalResults.put(qid, result);
                     });
 
-                    System.err.printf("Final results contains results for %d queries\n", finalResults.size());
+                    //System.err.printf("Final results contains results for %d queries\n", finalResults.size());
 
                     AtomicInteger i = new AtomicInteger(1);
                     finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
@@ -437,7 +446,7 @@ public class Main {
             }
             case "jelinekMercerCborQuery": {
                 //Check is args.length equality is correct
-                if (args.length == 6) {
+                if (args.length == 8) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String qrelFile = args[3];
@@ -445,6 +454,8 @@ public class Main {
                     //assert (mergeType.equals("AND") || mergeType.equals("OR"));
                     final String filterScored = args[4];
                     final double beta = Double.parseDouble(args[5]);
+                    final String mergeType = args[6];
+                    final String runfileName = args[7];
                     // preprocess cbor queries.
                     // execute queries in sequence.
                     final Index idx = Index.load(dbname).get();
@@ -465,7 +476,8 @@ public class Main {
                     FileWriter logfile = new FileWriter("queryLog.txt");
 
                     //Check Proper Formating for runFile**************************
-                    FileWriter runFile = new FileWriter(String.format("jelinekMercer_%.2f-TeamHotel.run", beta));
+                    //FileWriter runFile = new FileWriter(String.format("jelinekMercer_%.2f-TeamHotel.run", beta));
+                    FileWriter runFile = new FileWriter(runfileName);
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
 
@@ -494,11 +506,11 @@ public class Main {
                             } catch (IOException e) {
                                 e.printStackTrace();
                             }
-                            System.out.println();
+                            //System.out.println();
                             List<Pair<String, Double>> facetResults = Merge_Queries.queryJelinekMercer(idx, terms, beta, logfile, 1000);
                             queryResults.get(queryId).add(facetResults);
-                            System.out.printf("Facet has %d documents\n", facetResults.size());
-                            System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
+                            //System.out.printf("Facet has %d documents\n", facetResults.size());
+                            //System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
                         });
                     });
 
@@ -507,19 +519,19 @@ public class Main {
 
                     Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
                     queryResults.forEach((qid, facets) -> {
-                        System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                        //System.err.printf("qid %s has %d facets\n", qid, facets.size());
                         List<Pair<String, Double>> result;
                         if (filterScored.toLowerCase().equals("filter")) {
-                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, mergeType, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
                         }
                         else {
-                            result = Merge_Queries.mergeFacets(facets, 20);
+                            result = Merge_Queries.mergeFacets(facets, mergeType, 20);
                         }
-                        System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                        //System.err.printf("merging them together we get %d ranked documents\n", result.size());
                         finalResults.put(qid, result);
                     });
 
-                    System.err.printf("Final results contains results for %d queries\n", finalResults.size());
+                    //System.err.printf("Final results contains results for %d queries\n", finalResults.size());
 
                     AtomicInteger i = new AtomicInteger(1);
                     finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
@@ -562,13 +574,15 @@ public class Main {
                 }
                 break;
             }case "bim": {
-                if (args.length == 5) {
+                if (args.length == 7) {
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String qrelFile = args[3];
                     //final String mergeType = args[3].toUpperCase();
                     //assert (mergeType.equals("AND") || mergeType.equals("OR"));
                     final String filterScored = args[4];
+                    final String mergeType = args[5];
+                    final String runfileName = args[6];
                     // preprocess cbor queries.
                     // execute queries in sequence.
                     final Index idx = Index.load(dbname).get();
@@ -587,7 +601,8 @@ public class Main {
                     toRemove.forEach(qid -> facetedQueries.remove(qid));
 
                     FileWriter logfile = new FileWriter("queryLog.txt");
-                    FileWriter runFile = new FileWriter(String.format("bim-TeamHotel.run"));
+                    //FileWriter runFile = new FileWriter(String.format("bim-TeamHotel.run"));
+                    FileWriter runFile = new FileWriter(runfileName);
 
                     Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
 
@@ -616,11 +631,11 @@ public class Main {
                             } catch (IOException e) {
                                 e.printStackTrace();
                             }
-                            System.out.println();
+                            //System.out.println();
                             List<Pair<String, Double>> facetResults = Merge_Queries.queryBIM(idx, terms, logfile, 1000);
                             queryResults.get(queryId).add(facetResults);
-                            System.out.printf("Facet has %d documents\n", facetResults.size());
-                            System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
+                            //System.out.printf("Facet has %d documents\n", facetResults.size());
+                            //System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());
                         });
                     });
 
@@ -629,19 +644,19 @@ public class Main {
 
                     Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
                     queryResults.forEach((qid, facets) -> {
-                        System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                        //System.err.printf("qid %s has %d facets\n", qid, facets.size());
                         List<Pair<String, Double>> result;
                         if (filterScored.toLowerCase().equals("filter")) {
-                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                            result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, mergeType, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
                         }
                         else {
-                            result = Merge_Queries.mergeFacets(facets, 20);
+                            result = Merge_Queries.mergeFacets(facets, mergeType, 20);
                         }
-                        System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                        //System.err.printf("merging them together we get %d ranked documents\n", result.size());
                         finalResults.put(qid, result);
                     });
 
-                    System.err.printf("Final results contains results for %d queries\n", finalResults.size());
+                    //System.err.printf("Final results contains results for %d queries\n", finalResults.size());
 
                     AtomicInteger i = new AtomicInteger(1);
                     finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
