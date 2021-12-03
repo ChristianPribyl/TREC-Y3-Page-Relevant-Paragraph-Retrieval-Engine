@@ -18,6 +18,8 @@ public class Ranker {
     private double k1;
     private double k3;
     private double beta;
+    private double a;
+    private double b;
 
     public Ranker(TreeSet<PostingsList> queryPostings, int corpusSize) {
         this.corpusSize = corpusSize;
@@ -67,6 +69,12 @@ public class Ranker {
     private static Ranker jelinekMercerRanker(TreeSet<PostingsList> queryTerms, int corpusSize, double beta) {
         Ranker r = new Ranker(queryTerms, corpusSize);
         r.beta = beta;
+        return r;
+    }
+    private static Ranker bimRanker(TreeSet<PostingsList> queryTerms, int corpusSize, double a, double b) {
+        Ranker r = new Ranker(queryTerms, corpusSize);
+        r.a = a;
+        r.b = b;
         return r;
     }
 
@@ -134,12 +142,13 @@ public class Ranker {
     }
 
     public static Collection<IndexDocument> bim(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
-    int corpusSize) {
-        Ranker r = new Ranker(queryTerms, corpusSize);
+    int corpusSize, double a, double b) {
+        Ranker ranker = bimRanker(queryTerms, corpusSize, a, b);
+     
         List<IndexDocument> rankings = new LinkedList<>();
         //System.out.printf("Ranking %d documents\n", candidates.size());
         candidates.forEach(doc -> {
-            double score = r.bimScore(doc);
+            double score = ranker.bimScore(doc);
             doc.setFinalScore(score);
             int idx = 0;
             for (IndexDocument d: rankings) {
@@ -154,10 +163,11 @@ public class Ranker {
     }
     private double bimScore(IndexDocument doc) {
         return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
-            double N = corpusSize + 2;
+            
+            double N = corpusSize + b;
             double ct = 0.0;
             if (doc.termFrequency(termPosting.term()) > 0.0) {
-                double nt = termPosting.size() + 1;
+                double nt = termPosting.size() + a;
                 ct = calCT(N,nt);
             }
             return ct;

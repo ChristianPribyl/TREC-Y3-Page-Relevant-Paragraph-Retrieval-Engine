@@ -212,7 +212,6 @@ public class Main {
                     final String facetMergeType = args[3];
                     final String runfile = args[4];
                     final int resultsPerQuery = 20;
-
                     // generate list of queries
                     // facetedQueries = Map<queryid, List<queryFacets>>
                     // queryFacet = List<queryTerms>
@@ -238,7 +237,7 @@ public class Main {
                         AtomicInteger i = new AtomicInteger();
                         finalResult.forEach(p -> {
                             try {
-                                outFile.write(String.format("%s Q0 %s %d %f TeamHotel-%s", queryID, p.getLeft(), i, p.getRight(), "WordSimilarity"));
+                                outFile.write(String.format("%s Q0 %s %d %f TeamHotel-%s\n", queryID, p.getLeft(), i.get(), p.getRight(), "WordSimilarity"));
                             } catch (IOException ex) {
                                 ex.printStackTrace();
                             }
@@ -583,6 +582,11 @@ public class Main {
                     final String filterScored = args[4];
                     final String mergeType = args[5];
                     final String runfileName = args[6];
+                    //final String smoothing = args[5]; // l or j
+                    final double a = 1;
+			        final double b = 2;
+  
+                    
                     // preprocess cbor queries.
                     // execute queries in sequence.
                     final Index idx = Index.load(dbname).get();
@@ -632,7 +636,7 @@ public class Main {
                                 e.printStackTrace();
                             }
                             //System.out.println();
-                            List<Pair<String, Double>> facetResults = Merge_Queries.queryBIM(idx, terms, logfile, 1000);
+                            List<Pair<String, Double>> facetResults = Merge_Queries.queryBIM(idx, terms, a, b, logfile, 1000);
                             queryResults.get(queryId).add(facetResults);
                             //System.out.printf("Facet has %d documents\n", facetResults.size());
                             //System.out.printf("Query %s has %d facet results\n", queryId, queryResults.get(queryId).size());

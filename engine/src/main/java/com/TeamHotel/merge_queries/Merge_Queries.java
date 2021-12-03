@@ -135,7 +135,7 @@ public class Merge_Queries {
 			return results;
 	}
 
-	public static List<Pair<String, Double>> queryBIM(Index index, Map<String, Integer> queryTerms, FileWriter logfile ,int maxResults) {
+	public static List<Pair<String, Double>> queryBIM(Index index, Map<String, Integer> queryTerms,double a, double b, FileWriter logfile ,int maxResults) {
 			TreeSet<PostingsList> postingsLists = new TreeSet<>((PostingsList l, PostingsList r) -> {
 				if (l.size() > r.size()) return 1;
 				else if (l.size() < r.size()) return -1;
@@ -159,7 +159,8 @@ public class Merge_Queries {
 			});
 			originalPostings.addAll(postingsLists);
 			List<IndexDocument> matches = merge_OR_query(postingsLists);
-			Collection<IndexDocument> rankings = Ranker.bim(originalPostings, matches, index.getNumDocuments());
+		
+			Collection<IndexDocument> rankings = Ranker.bim(originalPostings, matches, index.getNumDocuments(), a,b);
 			ArrayList<Pair<String, Double>> results = new ArrayList<>();
 			int i = 1;
 			for (IndexDocument d : rankings) {
