@@ -1,6 +1,7 @@
 import os
 import time
 from datetime import datetime
+import sys
 
 bigIndex = "./indexFull.db"
 smallIndex = "./indexOnlyScored.db"
@@ -21,6 +22,10 @@ tfidf_variants = [
 
 doubleVariants = [
     0.0, 0.2, 0.4, 0.6, 0.8, 1.0
+]
+
+doubleariants2 = [
+    0.0, 0.5, 1.0
 ]
 
 facetMergeVariations = [
@@ -47,6 +52,77 @@ def runTfidfModels(resultsDir):
                         f.write("%.2f"%(end-start))
     os.system(f"mv *.run {resultsDir}; mv *.timeInSeconds {resultsDir}")
 
-os.system("rm -rf ../results")
-os.system("mkdir -p ../results")
-runTfidfModels("../results")
+def runBm25Models(resultsDir, index): #only 1 index (1/2 runs)
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ["filter"]: #always filter (1/2 runs)
+        for mergeType in facetMergeVariations:
+            for k1 in doubleVariants:
+                for k3 in doubleVariants2:
+                    for beta in doubleVariants2:
+                        outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                        print(f"{str(datetime.now())} {outfile}")
+                        start = time.time()
+                        os.system(f"java -jar target/{jar} bm25-cbor-query {index} {cborOutlines} {qrel} {k1} {k3} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                        end = time.time()
+                        with open(outfile + ".timeInSeconds", 'w') as f:
+                            f.write("%.2f"%(end-start))
+            for k1 in doubleVariants2:
+                for k3 in doubleVariants:
+                    for beta in doubleVariants2:
+                        outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                        print(f"{str(datetime.now())} {outfile}")
+                        start = time.time()
+                        os.system(f"java -jar target/{jar} bm25-cbor-query {index} {cborOutlines} {qrel} {k1} {k3} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                        end = time.time()
+                        with open(outfile + ".timeInSeconds", 'w') as f:
+                            f.write("%.2f"%(end-start))
+            for k1 in doubleVariants2:
+                for k3 in doubleVariants2:
+                    for beta in doubleVariants:
+                        outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                        print(f"{str(datetime.now())} {outfile}")
+                        start = time.time()
+                        os.system(f"java -jar target/{jar} bm25-cbor-query {index} {cborOutlines} {qrel} {k1} {k3} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                        end = time.time()
+                        with open(outfile + ".timeInSeconds", 'w') as f:
+                            f.write("%.2f"%(end-start))
+
+def runBimModels(resultsDir):
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ["filter", "nofilter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in facetMergeVariations:
+                outfile = f"bim-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                print(f"{str(datetime.now())} {outfile}")
+                start = time.time()
+                os.system(f"java -jar target/{jar} bim {index} {cborOutlines} {qrel} {filterOption} {mergeType} {outfile + '.run'}")
+                end = time.time()
+                with open(outfile + ".timeInSeconds", 'w') as f:
+                    f.write("%.2f"%(end-start))
+
+def runJelinekMercer(resultsDir, index):
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ["filter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in facetMergeVariations:
+                for beta in doubleVariants:
+                    outfile = f"jelinek-mercer-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                    print(f"{str(datetime.now())} {outfile}")
+                    start = time.time()
+                    os.system(f"java -jar target/{jar} jelinekMercerCborQuery {index} {cborOutlines} {qrel} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                    end = time.time()
+                    with open(outfile + ".timeInSeconds", 'w') as f:
+                        f.write("%.2f"%(end-start))
+
+model = sys.argv[1]
+os.system('mkdir -p ../results')
+if model == 'tfidf':
+    runTfidfModels("../results")
+elif model == 'bm25':
+    runBm25Models("../results", smallIndex)
+    runBm25Models("../results", bigIndex)
+elif model == 'bim':
+    runBimModels("../results")
+elif model == 'jelinek-mercer':
+    runJelinekMercer('../results', smallIndex)
+    runJelinekMercer('../results', bigIndex)

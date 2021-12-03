@@ -343,10 +343,10 @@ public class Main {
                     final String qrelFile = args[3];
                     //final String mergeType = args[3].toUpperCase();
                     //assert (mergeType.equals("AND") || mergeType.equals("OR"));
-                    final String filterScored = args[4];
-                    final double k1 = Double.parseDouble(args[5]);
-                    final double k3 = Double.parseDouble(args[6]);
-                    final double alpha = Double.parseDouble(args[7]);
+                    final double k1 = Double.parseDouble(args[4]);
+                    final double k3 = Double.parseDouble(args[5]);
+                    final double alpha = Double.parseDouble(args[6]);
+                    final String filterScored = args[7];
                     final String mergeType = args[8];
                     final String runfileName = args[9];
                     // preprocess cbor queries.
@@ -452,8 +452,8 @@ public class Main {
                     final String qrelFile = args[3];
                     //final String mergeType = args[3].toUpperCase();
                     //assert (mergeType.equals("AND") || mergeType.equals("OR"));
-                    final String filterScored = args[4];
-                    final double beta = Double.parseDouble(args[5]);
+                    final double beta = Double.parseDouble(args[4]);
+                    final String filterScored = args[5];
                     final String mergeType = args[6];
                     final String runfileName = args[7];
                     // preprocess cbor queries.

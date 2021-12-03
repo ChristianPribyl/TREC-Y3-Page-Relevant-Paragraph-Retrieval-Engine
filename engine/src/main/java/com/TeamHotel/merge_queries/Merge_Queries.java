@@ -274,12 +274,15 @@ public class Merge_Queries {
 	}
 
 	private static List<List<Pair<String, Double>>> combineScoresAndSetToRank(List<List<Pair<String, Double>>> facets, final int maxResults) {
+		List<List<Pair<String, Double>>> res = new ArrayList<>(facets.size());
 		for (List<Pair<String, Double>> facet: facets) {
 			int index = 1;
+			List<Pair<String, Double>> newFacet = new ArrayList<>(facet.size());
 			for (Pair<String, Double> doc: facet) {
-				doc.setValue(1.0 / index);
+				newFacet.add(Pair.of(doc.getLeft(), 1.0 / index));
 				index++;
 			}
+			res.add(newFacet);
 		}
 		return facets;
 	}
