@@ -20,6 +20,11 @@ tfidf_variants = [
     "ntn.nnn"
 ]
 
+tfidf_variants2 = [
+    "ltn.nnn"
+    "lnn.nnn"
+]
+
 doubleVariants = [
     0.0, 0.2, 0.4, 0.6, 0.8, 1.0
 ]
@@ -51,6 +56,22 @@ def runTfidfModels(resultsDir):
                     with open(outfile + ".timeInSeconds", 'w') as f:
                         f.write("%.2f"%(end-start))
     os.system(f"mv *.run {resultsDir}; mv *.timeInSeconds {resultsDir}")
+
+def runTfidfModels2(resultsDir):
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ["filter", "nofilter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in facetMergeVariations:
+                for tfidfVariant in tfidf_variants2:
+                    outfile = f"tfidf-{tfidfVariant}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                    print(f"{str(datetime.now())} {outfile}")
+                    start = time.time()
+                    os.system(f"java -jar target/{jar} tfidf-cbor-query {index} {cborOutlines} {qrel} {tfidfVariant} {filterOption} {mergeType} {outfile + '.run'}")
+                    end = time.time()
+                    with open(outfile + ".timeInSeconds", 'w') as f:
+                        f.write("%.2f"%(end-start))
+    os.system(f"mv *.run {resultsDir}; mv *.timeInSeconds {resultsDir}")
+
 
 def runBm25Models(resultsDir, index): #only 1 index (1/2 runs)
     os.system("rm *.run; rm *.timeInSeconds")
@@ -126,3 +147,5 @@ elif model == 'bim':
 elif model == 'jelinek-mercer':
     runJelinekMercer('../results', smallIndex)
     runJelinekMercer('../results', bigIndex)
+elif model == 'tfidf2':
+    runTfidfModels2("../results")
