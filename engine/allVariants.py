@@ -223,6 +223,60 @@ def bm25small():
                     f.write("%.2f"%(end-start))
 
 
+def bm251():
+    index = bigIndex
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ['filter', 'nofilter']:
+        for mergeType in facetMergeVariations:
+            for n in [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]:
+                k1 = n[0]
+                k3 = n[1]
+                beta = n[2]
+                outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                print(f"{str(datetime.now())} {outfile}")
+                start = time.time()
+                os.system(f"java -jar target/{jar} bm25-cbor-query {index} {cborOutlines} {qrel} {k1} {k3} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                end = time.time()
+                with open(outfile + ".timeInSeconds", 'w') as f:
+                    f.write("%.2f"%(end-start))
+
+def bm252():
+    index = bigIndex
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ['filter', 'nofilter']:
+        for mergeType in facetMergeVariations:
+            for n in [[1.0, 0.0, 0.0],
+                    [1.0, 0.5, 0.0], [1.0, 1.0, 0.0]]:
+                k1 = n[0]
+                k3 = n[1]
+                beta = n[2]
+                outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                print(f"{str(datetime.now())} {outfile}")
+                start = time.time()
+                os.system(f"java -jar target/{jar} bm25-cbor-query {index} {cborOutlines} {qrel} {k1} {k3} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                end = time.time()
+                with open(outfile + ".timeInSeconds", 'w') as f:
+                    f.write("%.2f"%(end-start))
+
+def bm253():
+    index = bigIndex
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ['filter', 'nofilter']:
+        for mergeType in facetMergeVariations:
+            for n in [[0.6, 1.0, 0.0], [0.2, 1.0, 0.0],
+                    [1.0, 1.0, 1.0], [1.0, 1.0, 0.5]]:
+                k1 = n[0]
+                k3 = n[1]
+                beta = n[2]
+                outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                print(f"{str(datetime.now())} {outfile}")
+                start = time.time()
+                os.system(f"java -jar target/{jar} bm25-cbor-query {index} {cborOutlines} {qrel} {k1} {k3} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                end = time.time()
+                with open(outfile + ".timeInSeconds", 'w') as f:
+                    f.write("%.2f"%(end-start))
+
+
 model = sys.argv[1]
 os.system('mkdir -p ../results')
 if model == 'tfidf':
@@ -247,3 +301,9 @@ elif model == 'jelinek2':
     recurranceJelinek()
 elif model == 'bm25small':
     bm25small()
+elif model == 'bm251':
+    bm251()
+elif model == 'bm252':
+    bm252()
+elif model == 'bm253':
+    bm253()
