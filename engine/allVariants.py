@@ -139,6 +139,73 @@ def runJelinekMercer(resultsDir, index):
 def runTest():
     os.system(f"java -jar target/{jar} tfidf-cbor-query {smallIndex} {cborOutlines} {qrel} btn.bnn filter rankRecurrance {'test.run'}")
 
+def recurranceTfidf():
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ["filter", "nofilter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in ['recurrance']:
+                for tfidfVariant in tfidf_variants:
+                    outfile = f"tfidf-{tfidfVariant}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                    print(f"{str(datetime.now())} {outfile}")
+                    start = time.time()
+                    os.system(f"java -jar target/{jar} tfidf-cbor-query {index} {cborOutlines} {qrel} {tfidfVariant} {filterOption} {mergeType} {outfile + '.run'}")
+                    end = time.time()
+                    with open(outfile + ".timeInSeconds", 'w') as f:
+                        f.write("%.2f"%(end-start))
+    for filterOption in ["filter", "nofilter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in ['recurrance']:
+                for tfidfVariant in tfidf_variants2:
+                    outfile = f"tfidf-{tfidfVariant}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                    print(f"{str(datetime.now())} {outfile}")
+                    start = time.time()
+                    os.system(f"java -jar target/{jar} tfidf-cbor-query {index} {cborOutlines} {qrel} {tfidfVariant} {filterOption} {mergeType} {outfile + '.run'}")
+                    end = time.time()
+                    with open(outfile + ".timeInSeconds", 'w') as f:
+                        f.write("%.2f"%(end-start))
+    os.system(f"mv *.run {resultsDir}; mv *.timeInSeconds {resultsDir}")
+
+def recurranceBim():
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ["filter", "nofilter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in ['recurrance']:
+                outfile = f"bim-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                print(f"{str(datetime.now())} {outfile}")
+                start = time.time()
+                os.system(f"java -jar target/{jar} bim {index} {cborOutlines} {qrel} {filterOption} {mergeType} {outfile + '.run'}")
+                end = time.time()
+                with open(outfile + ".timeInSeconds", 'w') as f:
+                    f.write("%.2f"%(end-start))
+
+def recurranceJelinek():
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ["filter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in ['rankRecurrance', 'roundRobin']:
+                for beta in [0.8, 1.0]:
+                    outfile = f"jelinek-mercer-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                    print(f"{str(datetime.now())} {outfile}")
+                    start = time.time()
+                    os.system(f"java -jar target/{jar} jelinekMercerCborQuery {index} {cborOutlines} {qrel} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                    end = time.time()
+                    with open(outfile + ".timeInSeconds", 'w') as f:
+                        f.write("%.2f"%(end-start))
+    for filterOption in ["nofilter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in ['recurrance']:
+                for beta in doubleVariants:
+                    outfile = f"jelinek-mercer-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                    print(f"{str(datetime.now())} {outfile}")
+                    start = time.time()
+                    os.system(f"java -jar target/{jar} jelinekMercerCborQuery {index} {cborOutlines} {qrel} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                    end = time.time()
+                    with open(outfile + ".timeInSeconds", 'w') as f:
+                        f.write("%.2f"%(end-start))
+
+
+
+
 model = sys.argv[1]
 os.system('mkdir -p ../results')
 if model == 'tfidf':
@@ -155,3 +222,9 @@ elif model == 'tfidf2':
     runTfidfModels2("../results")
 elif model == 'test':
     runTest()
+elif model == 'tfidf2':
+    recurranceTfidf()
+elif model == 'bim2':
+    recurranceBim()
+elif model =='jelinek2':
+    recurranceJelinek()
