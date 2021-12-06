@@ -135,6 +135,10 @@ def runJelinekMercer(resultsDir, index):
                     with open(outfile + ".timeInSeconds", 'w') as f:
                         f.write("%.2f"%(end-start))
 
+
+def runTest():
+    os.system(f"java -jar target/{jar} tfidf-cbor-query {smallIndex} {cborOutlines} {qrel} btn.bnn filter rankRecurrance {'test.run'}")
+
 model = sys.argv[1]
 os.system('mkdir -p ../results')
 if model == 'tfidf':
@@ -149,3 +153,5 @@ elif model == 'jelinek-mercer':
     runJelinekMercer('../results', bigIndex)
 elif model == 'tfidf2':
     runTfidfModels2("../results")
+elif model == 'test':
+    runTest()
