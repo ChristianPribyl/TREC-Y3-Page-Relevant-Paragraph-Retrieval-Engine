@@ -206,7 +206,9 @@ public class Main {
                 break;
             }
             case "cluster-cbor-query": {
+            
                 if (args.length == 5) {
+                
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String facetMergeType = args[3];
