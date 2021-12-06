@@ -208,12 +208,12 @@ def bm25small():
     os.system("rm *.run; rm *.timeInSeconds")
     for filterOption in ['filter', 'nofilter']:
         for mergeType in facetMergeVariations:
-            for n in [(0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0),
-                    (1.0, 0.5, 0.0), (1.0, 1.0, 0.0), (0.6, 1.0, 0.0), (0.2, 1.0, 0.0),
-                    (1.0, 1.0, 1.0), (1.0, 1.0, 0.5)]:
+            for n in [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0],
+                    [1.0, 0.5, 0.0], [1.0, 1.0, 0.0], [0.6, 1.0, 0.0], [0.2, 1.0, 0.0],
+                    [1.0, 1.0, 1.0], [1.0, 1.0, 0.5]]:
                 k1 = n[0]
-                k2 = n[1]
-                beta = [2]
+                k3 = n[1]
+                beta = n[2]
                 outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
                 print(f"{str(datetime.now())} {outfile}")
                 start = time.time()
