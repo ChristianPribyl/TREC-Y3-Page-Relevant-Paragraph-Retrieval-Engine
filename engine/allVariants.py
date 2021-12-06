@@ -204,19 +204,23 @@ def recurranceJelinek():
                         f.write("%.2f"%(end-start))
 
 def bm25small():
+    index = smallIndex
     os.system("rm *.run; rm *.timeInSeconds")
     for filterOption in ['filter', 'nofilter']:
         for mergeType in facetMergeVariations:
-            for k1 in doubleVariants:
-                for k3 in doubleVariants2:
-                    for beta in doubleVariants2:
-                        outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
-                        print(f"{str(datetime.now())} {outfile}")
-                        start = time.time()
-                        os.system(f"java -jar target/{jar} bm25-cbor-query {index} {cborOutlines} {qrel} {k1} {k3} {beta} {filterOption} {mergeType} {outfile + '.run'}")
-                        end = time.time()
-                        with open(outfile + ".timeInSeconds", 'w') as f:
-                            f.write("%.2f"%(end-start))
+            for n in [(0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0),
+                    (1.0, 0.5, 0.0), (1.0, 1.0, 0.0), (0.6, 1.0, 0.0), (0.2, 1.0, 0.0),
+                    (1.0, 1.0, 1.0), (1.0, 1.0, 0.5)]:
+                k1 = n[0]
+                k2 = n[1]
+                beta = [2]
+                outfile = f"bm25-{k1}-{k3}-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                print(f"{str(datetime.now())} {outfile}")
+                start = time.time()
+                os.system(f"java -jar target/{jar} bm25-cbor-query {index} {cborOutlines} {qrel} {k1} {k3} {beta} {filterOption} {mergeType} {outfile + '.run'}")
+                end = time.time()
+                with open(outfile + ".timeInSeconds", 'w') as f:
+                    f.write("%.2f"%(end-start))
 
 
 model = sys.argv[1]
