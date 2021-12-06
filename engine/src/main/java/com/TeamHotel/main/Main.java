@@ -684,7 +684,37 @@ public class Main {
                 }
                 break;
 
+            } case "list-queries": {
+                if (args.length == 3) {
+                    final String cborQueryFile = args[1];
+                    final String qrelFile = args[2];
+                    final Map<String, Set<String>> qrelDocs = Preprocess.getScoredQrelDocs(qrelFile).get();
+
+                    final Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
+
+                    // remove queries without qrel evaluation data
+                    final List<String> toRemove = new LinkedList<>();
+                    facetedQueries.keySet().forEach(qid -> {
+                        if (!qrelDocs.keySet().contains(qid)) {
+                            toRemove.add(qid);
+                        }
+                    });
+                    toRemove.forEach(qid -> facetedQueries.remove(qid));
+
+                    facetedQueries.forEach((qid, facets) -> {
+                        System.out.printf("Query ID: %s\n", qid);
+                        facets.forEach(terms -> {
+                            System.out.print("Facet:");
+                            terms.forEach(term -> System.out.printf( "%s", term));
+                            System.out.println();
+                        });
+                    });
+                } else {
+                    System.out.printf("Usage: %s list-queries <cborOutlines> <qrel>");
+                }
+                break;
             }
+
             default:
             System.out.printf("Usage: %s [query-vocab | corpus-vocab | preprocess-similarity-vectors\n | create-empty-index | add-documents | calculate-vectors\n | cluster | cluster-cbor-query | make-postings | reset-postings]\n" +
             "Run commands for specific usage instructions\n", progName);
