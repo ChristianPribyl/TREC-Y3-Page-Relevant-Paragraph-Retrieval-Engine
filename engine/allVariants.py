@@ -21,7 +21,7 @@ tfidf_variants = [
 ]
 
 tfidf_variants2 = [
-    "ltn.nnn"
+    "ltn.nnn",
     "lnn.nnn"
 ]
 
