@@ -227,7 +227,7 @@ def bm251():
     index = bigIndex
     os.system("rm *.run; rm *.timeInSeconds")
     for filterOption in ['filter', 'nofilter']:
-        for mergeType in facetMergeVariations:
+        for mergeType in ['RoundRobin']:
             for n in [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]:
                 k1 = n[0]
                 k3 = n[1]
@@ -244,7 +244,7 @@ def bm252():
     index = bigIndex
     os.system("rm *.run; rm *.timeInSeconds")
     for filterOption in ['filter', 'nofilter']:
-        for mergeType in facetMergeVariations:
+        for mergeType in ['RoundRobin']:
             for n in [[1.0, 0.0, 0.0],
                     [1.0, 0.5, 0.0], [1.0, 1.0, 0.0]]:
                 k1 = n[0]
@@ -262,7 +262,7 @@ def bm253():
     index = bigIndex
     os.system("rm *.run; rm *.timeInSeconds")
     for filterOption in ['filter', 'nofilter']:
-        for mergeType in facetMergeVariations:
+        for mergeType in ['RoundRobin']:
             for n in [[0.6, 1.0, 0.0], [0.2, 1.0, 0.0],
                     [1.0, 1.0, 1.0], [1.0, 1.0, 0.5]]:
                 k1 = n[0]
