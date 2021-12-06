@@ -2,6 +2,8 @@ Build the code:
 
 ./mvnw package
 
+Full index download site: https://mega.nz/file/uihhhaTJ#uEgrhMts_YTGzlH1UkMXrdKmVIPHTRHsmhLZi58K6-A
+
 MergeType:
 
 RoundRobin
@@ -37,3 +39,12 @@ java -jar target/ir-engine-0.jar bim indexOnlyScored.db benchmarkY3test.cbor-out
 B25:
 
 Jelinek-Mercer:
+
+
+For ALL run files:
+
+
+BIM:
+
+python3 allVariants.py bim
+
