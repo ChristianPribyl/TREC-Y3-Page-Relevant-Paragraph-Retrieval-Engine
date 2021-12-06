@@ -193,7 +193,7 @@ def recurranceJelinek():
                         f.write("%.2f"%(end-start))
     for filterOption in ["nofilter"]:
         for index in [smallIndex, bigIndex]:
-            for mergeType in ['recurrance']:
+            for mergeType in mergeTypes:
                 for beta in doubleVariants:
                     outfile = f"jelinek-mercer-{beta}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
                     print(f"{str(datetime.now())} {outfile}")
