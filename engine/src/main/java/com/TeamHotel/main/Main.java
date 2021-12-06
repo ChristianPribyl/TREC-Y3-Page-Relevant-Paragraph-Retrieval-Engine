@@ -705,7 +705,7 @@ public class Main {
                         System.out.printf("Query ID: %s\n", qid);
                         facets.forEach(terms -> {
                             System.out.print("Facet:");
-                            terms.forEach(term -> System.out.printf( "%s", term));
+                            terms.forEach(term -> System.out.printf(" %s", term));
                             System.out.println();
                         });
                     });

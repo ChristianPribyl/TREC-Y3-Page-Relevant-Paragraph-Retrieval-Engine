@@ -239,7 +239,7 @@ elif model == 'tfidf2':
     runTfidfModels2("../results")
 elif model == 'test':
     runTest()
-elif model == 'tfidf2':
+elif model == 'tfidf3':
     recurranceTfidf()
 elif model == 'bim2':
     recurranceBim()

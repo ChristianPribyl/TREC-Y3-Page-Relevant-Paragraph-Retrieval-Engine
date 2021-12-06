@@ -70,3 +70,12 @@ Jelinek-Mercer:
 java -jar target/ir-engine-0.jar <model> <index> <cbor-outlines> <qrel> <beta> [filter | nofilter] <mergeType> <runfile>
 
 
+Evaluation:
+Get the mean and stderr of each runfile using the following command:
+
+documentretrievalengine/score.sh <measure>
+
+where <measure> is the same as would be provided to the trec_eval utility.
+For our report we used map:
+
+./score.sh map
