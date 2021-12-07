@@ -207,12 +207,14 @@ public class Main {
             }
             case "cluster-cbor-query": {
             
-                if (args.length == 5) {
+                if (args.length == 7) {
                 
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
                     final String facetMergeType = args[3];
-                    final String runfile = args[4];
+                    final String wordVFile = args[4];
+                    final int maxDocuments = Integer.parseInt(args[5]);
+                    final String runfile = args[6];
                     final int resultsPerQuery = 20;
                     // generate list of queries
                     // facetedQueries = Map<queryid, List<queryFacets>>
@@ -221,9 +223,9 @@ public class Main {
                     // Each query facet should be treated like a normal query.
                     // For each query id, we query each individual facet query, and merge the results.
                     Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
-
+                    HashMap<String, ArrayList<Double>> wordVectors = new HashMap<String, ArrayList<Double>>();
                     Index idx = Index.load(dbname).get();
-
+                    WordSimilarity.wordVectorfile(wordVFile,wordVectors);
                     //FileWriter outFile = new FileWriter(String.format("WordSimilarity+Clustering-Y3.run"));
                     FileWriter outFile = new FileWriter(runfile);
 
@@ -231,7 +233,7 @@ public class Main {
                         final List<List<Pair<String, Double>>> allFacetResults = new LinkedList<>();
                         facets.forEach((List<String> queryFacet) -> {
                             // List<DocID, Score>
-                            final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet, resultsPerQuery);
+                            final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet,wordVectors, resultsPerQuery,maxDocuments);
                             allFacetResults.add(facetResults);
                         });
                         final List<Pair<String, Double>> finalResult = Merge_Queries.mergeFacets(allFacetResults, facetMergeType, 20);

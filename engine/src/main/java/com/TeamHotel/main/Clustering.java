@@ -2,10 +2,12 @@ package com.TeamHotel.main;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.TeamHotel.inverindex.Index;
 import org.apache.commons.lang3.RandomUtils;
@@ -36,7 +38,7 @@ public class Clustering {
             System.out.println("clusterId: " + randomDocIdAndVector.get());
             //idx.setDocumentClass(randomDocIdAndVector.get().getKey(), i);
             idx.addFakeLeader(1, randomDocIdAndVector.get().getValue());
-            Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector1 = idx.getDocumentVectorByIndex(44146);
+            Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector1 = idx.getDocumentVectorByIndex(28869716);
             idx.addFakeLeader(2, randomDocIdAndVector1.get().getValue());
             System.out.println("clusterId: " + randomDocIdAndVector.get());
         //}
@@ -65,13 +67,39 @@ public class Clustering {
      *            The list length should be at most <resultsPerQuery>
      *            The Pair<String, Double> should contain the Document ID, and the Document Score.
      */
-    public static List<Pair<String, Double>> query(Index idx, @NotNull final List<String> query, int resultsPerQuery) {
+    public static List<Pair<String, Double>> query(Index idx, @NotNull final List<String> query, HashMap<String, ArrayList<Double>> wordVector, int resultsPerQuery,Integer numOfDoc) {
         List<Pair<String, Double>> results = new LinkedList<>();
+        final int numDimensions = 100;
+        AtomicInteger counter = new AtomicInteger();
+        ArrayList<Double> queryVector = new ArrayList<>(Collections.nCopies(numDimensions, 0.0));
+        query.forEach(q -> {
+            ArrayList<Double> wordVec = wordVector.get(q);
+            if (wordVec != null) {
+                WordSimilarity.addVectors(queryVector,wordVector.get(q));
+            }
+            counter.incrementAndGet();
+        });
+        int num = counter.intValue();
+        for (int i = 0; i < queryVector.size();i++){
+            queryVector.set(i, queryVector.get(i) / num);
+        }
+        Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, numOfDoc);
+        while( documentIterator.hasNext() ) {
+            Triple<String, Integer, ArrayList<Double>> doc = documentIterator.next();
+            ArrayList<Double> docvec = doc.getRight();
+            String currdocID = doc.getLeft();
 
+            double score = dotProduct(docvec,queryVector);
+            results.add(Pair.of(currdocID, score));
+        }
+
+    
+
+
+        
         // example
-        String docId = "rvqWRVAVWetbVWEqw"; // the trec id
-        double score = 0.54;
-        results.add(Pair.of(docId, score));
+        //String docId = "rvqWRVAVWetbVWEqw"; // the trec id
+    
         return results;
     }
 
@@ -172,5 +200,13 @@ public class Clustering {
         
         }
         return p1;
+    }
+
+    public static double dotProduct(ArrayList<Double> doc, ArrayList<Double> queryvector) {
+        double score = 0;
+        for (int i = 0; i < doc.size();i++){
+            score +=  queryvector.get(i) * doc.get(i);
+        }
+        return score;
     }
 }
