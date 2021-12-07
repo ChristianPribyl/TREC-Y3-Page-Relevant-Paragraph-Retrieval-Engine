@@ -82,14 +82,17 @@ public class Clustering {
         int num = counter.intValue();
         for (int i = 0; i < queryVector.size();i++){
             queryVector.set(i, queryVector.get(i) / num);
+        
         }
+        //System.out.println("query: " + queryVector );
         Iterator<Triple<String, Integer, ArrayList<Double>>> documentIterator = idx.getAllDocuments(0, numOfDoc);
         while( documentIterator.hasNext() ) {
             Triple<String, Integer, ArrayList<Double>> doc = documentIterator.next();
             ArrayList<Double> docvec = doc.getRight();
             String currdocID = doc.getLeft();
-
+            
             double score = dotProduct(docvec,queryVector);
+            //System.out.println(" " + currdocID + " " + score );
             results.add(Pair.of(currdocID, score));
         }
 
