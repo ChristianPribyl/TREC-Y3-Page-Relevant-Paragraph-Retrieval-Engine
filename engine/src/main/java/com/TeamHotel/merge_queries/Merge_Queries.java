@@ -268,7 +268,7 @@ public class Merge_Queries {
 		});
 		
 		return results.entrySet().stream()
-			.sorted((Map.Entry<String, Double> l, Map.Entry<String, Double> r) -> Double.compare(l.getValue(), r.getValue()))
+			.sorted((Map.Entry<String, Double> l, Map.Entry<String, Double> r) -> -Double.compare(l.getValue(), r.getValue()))
 			.limit(maxResults)
 			.map(e -> Pair.of(e.getKey(), e.getValue()))
 			.collect(Collectors.toList());
