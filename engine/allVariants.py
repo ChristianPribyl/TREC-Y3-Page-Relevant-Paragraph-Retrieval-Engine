@@ -8,6 +8,7 @@ smallIndex = "./indexOnlyScored.db"
 cborOutlines = "../benchmarkY3test.cbor-outlines.cbor"
 qrel = "../trec_pages.qrel"
 jar = "ir-engine-0.jar"
+wordVfile = "./preprocessed.6B.100d.txt"
 
 tfidf_variants = [
     "nnn.nnn",
@@ -72,6 +73,18 @@ def runTfidfModels2(resultsDir):
                         f.write("%.2f"%(end-start))
     os.system(f"mv *.run {resultsDir}; mv *.timeInSeconds {resultsDir}")
 
+def runWordSim(resultsDir):
+    os.system("rm *.run; rm *.timeInSeconds")
+    for filterOption in ["filter", "nofilter"]:
+        for index in [smallIndex, bigIndex]:
+            for mergeType in facetMergeVariations:
+                outfile = f"wordsim-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{mergeType}"
+                print(f"{str(datetime.now())} {outfile}")
+                start = time.time()
+                os.system(f"java -jar target/{jar} wordSim-cbor-query {index} {cborOutlines} {qrel}  {mergeType} {wordVfile} {filterOption} 30000000 {outfile + '.run'}")
+                end = time.time()
+                with open(outfile + ".timeInSeconds", 'w') as f:
+                    f.write("%.2f"%(end-start))
 
 def runBm25Models(resultsDir, index): #only 1 index (1/2 runs)
     os.system("rm *.run; rm *.timeInSeconds")
@@ -286,6 +299,8 @@ elif model == 'bm25':
     runBm25Models("../results", bigIndex)
 elif model == 'bim':
     runBimModels("../results")
+elif model == 'wordsim':
+    runWordSim("../results")
 elif model == 'jelinek-mercer':
     runJelinekMercer('../results', smallIndex)
     runJelinekMercer('../results', bigIndex)
