@@ -307,3 +307,10 @@ elif model == 'bm252':
     bm252()
 elif model == 'bm253':
     bm253()
+elif model == '12/7-tfidf':
+    for variant in ['atc.anc', 'btn.bnn', 'nnn.nnn', 'atn.ann']:
+        for index in [bigIndex, smallIndex]:
+            for filterOption in ['filter', 'nofilter']:
+                outfile = f"tfidf-{variant}-{index.replace('.db', '').replace('.', '').replace('/', '')}-{filterOption}-{'recurrance'}"
+                print(f"{str(datetime.now())} {outfile}")
+                os.system(f"java -jar target/{jar} tfidf-cbor-query {index} {cborOutlines} {qrel} {variant} {filterOption} {'recurrance'} {outfile + '.run'}")

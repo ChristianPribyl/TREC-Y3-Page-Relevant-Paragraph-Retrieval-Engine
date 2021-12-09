@@ -441,6 +441,7 @@ public class Preprocess {
         return vocab;
     }
 
+    // @review
     @NotNull
     public static Map<String, List<List<String>>> preprocessFacetedQueries(@NotNull final String cborOutlinesFile) {
         Map<String, List<List<String>>> queries = new HashMap<>();
@@ -464,6 +465,7 @@ public class Preprocess {
         return preprocessList(queries);
     }
 
+    // @review
     private static Map<String, List<List<String>>> preprocessList(@NotNull final Map<String, List<List<String>>> facetedQueries) {
         final Set<String> stopWords = loadStopWords();
         final SnowballStemmer stemmer = new porterStemmer();

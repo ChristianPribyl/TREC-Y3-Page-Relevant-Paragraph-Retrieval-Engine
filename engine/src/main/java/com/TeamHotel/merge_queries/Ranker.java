@@ -10,36 +10,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class Ranker {
-    private final Set<PostingsList> queryPostings;
-    private final Map<String, Integer> dfCache;
-    private char[] variant;
-    private final int corpusSize;
-    private double[] queryVector;
-    private double k1;
-    private double k3;
-    private double beta;
-    private double a;
-    private double b;
-
-    public Ranker(TreeSet<PostingsList> queryPostings, int corpusSize) {
-        this.corpusSize = corpusSize;
-        this.queryPostings = queryPostings;
-        dfCache = queryPostings.stream().collect(Collectors.toMap(PostingsList::term, PostingsList::size));
-    }
-
-    private static Ranker tfidfRanker(String variant, TreeSet<PostingsList> queryPostings, int corpusSize) {
-        Ranker r = new Ranker(queryPostings, corpusSize);
-        char[] variantData = variant.toCharArray();
-        assert(variantData[0] == variantData[4]);
-        assert(variantData.length == 7);
-        r.variant = variantData;
-        r.queryVector = r.calculateQueryVector(queryPostings);
-        return r;
-    }
-
     public static Collection<IndexDocument> tfidf(@NotNull String variant, @NotNull TreeSet<PostingsList> queryTerms,
                                                   @NotNull List<IndexDocument> candidates, int corpusSize) {
-        assert(validateVariant(variant));
         Ranker ranker = tfidfRanker(variant, queryTerms, corpusSize);
         List<IndexDocument> rankings = new LinkedList<>();
         //System.out.printf("Ranking %d documents\n", candidates.size());
@@ -56,26 +28,6 @@ public class Ranker {
             rankings.add(idx, doc);
         });
         return rankings;
-    }
-
-    private static Ranker bm25Ranker(TreeSet<PostingsList> queryTerms, int corpusSize, double k1, double k3, double beta) {
-        Ranker r = new Ranker(queryTerms, corpusSize);
-        r.k1 = k1;
-        r.k3 = k3;
-        r.beta = beta;
-        return r;
-    }
-
-    private static Ranker jelinekMercerRanker(TreeSet<PostingsList> queryTerms, int corpusSize, double beta) {
-        Ranker r = new Ranker(queryTerms, corpusSize);
-        r.beta = beta;
-        return r;
-    }
-    private static Ranker bimRanker(TreeSet<PostingsList> queryTerms, int corpusSize, double a, double b) {
-        Ranker r = new Ranker(queryTerms, corpusSize);
-        r.a = a;
-        r.b = b;
-        return r;
     }
 
     public static Collection<IndexDocument> bm25(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
@@ -118,29 +70,6 @@ public class Ranker {
         return rankings;
     }
 
-    private double jelinekMercerScore(IndexDocument doc) {
-        return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
-            double tfd = doc.termFrequency(termPosting.term());
-            //Unsure if this is the term's frequency out of every document in corpus or not
-            double tfq = termPosting.getQueryTermFrequency();
-            double pt = tfq / corpusSize;
-            return ( Math.log(  ( beta * ( ( tfd ) / (doc.getNumTerms() - tfd ) ) ) + (1-beta) * pt ) );
-        })).getSum();
-    }
-
-    private double bm25Score(IndexDocument doc) {
-        double L = (1 - beta) + (beta * doc.getNumTerms());
-        return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
-            double tfd = doc.termFrequency(termPosting.term());
-            double tfq = termPosting.getQueryTermFrequency();
-            return (Math.log(corpusSize * 1.0 / termPosting.size())
-            * ((k1 + 1) * tfd)
-            * ((k3 + 1) * tfq)
-            / (((k1 * L) + tfd)
-              * (k3 + tfq)));
-        })).getSum();
-    }
-
     public static Collection<IndexDocument> bim(final @NotNull TreeSet<PostingsList> queryTerms, final @NotNull List<IndexDocument> candidates,
     int corpusSize, double a, double b) {
         Ranker ranker = bimRanker(queryTerms, corpusSize, a, b);
@@ -161,6 +90,80 @@ public class Ranker {
         });
         return rankings;
     }
+
+    private final Set<PostingsList> queryPostings;
+    private final Map<String, Integer> dfCache;
+    private char[] variant;
+    private final int corpusSize;
+    private double[] queryVector;
+    private double k1;
+    private double k3;
+    private double beta;
+    private double a;
+    private double b;
+
+    private Ranker(TreeSet<PostingsList> queryPostings, int corpusSize) {
+        this.corpusSize = corpusSize;
+        this.queryPostings = queryPostings;
+        dfCache = queryPostings.stream().collect(Collectors.toMap(PostingsList::term, PostingsList::size));
+    }
+
+    private static Ranker tfidfRanker(String variant, TreeSet<PostingsList> queryPostings, int corpusSize) {
+        Ranker r = new Ranker(queryPostings, corpusSize);
+        r.variant = variant.toCharArray();
+        r.queryVector = r.calculateQueryVector(queryPostings);
+        return r;
+    }
+
+    private double tfidfScore(IndexDocument doc) {
+        double[] docVector = calculateDocumentVector(doc);
+        return dotProduct(docVector, queryVector);
+    }
+
+    private static Ranker bm25Ranker(TreeSet<PostingsList> queryTerms, int corpusSize, double k1, double k3, double beta) {
+        Ranker r = new Ranker(queryTerms, corpusSize);
+        r.k1 = k1;
+        r.k3 = k3;
+        r.beta = beta;
+        return r;
+    }
+
+    private double bm25Score(IndexDocument doc) {
+        double L = (1 - beta) + (beta * doc.getNumTerms());
+        return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
+            double tfd = doc.termFrequency(termPosting.term());
+            double tfq = termPosting.getQueryTermFrequency();
+            return (Math.log(corpusSize * 1.0 / termPosting.size())
+            * ((k1 + 1) * tfd)
+            * ((k3 + 1) * tfq)
+            / (((k1 * L) + tfd)
+              * (k3 + tfq)));
+        })).getSum();
+    }
+
+    private static Ranker jelinekMercerRanker(TreeSet<PostingsList> queryTerms, int corpusSize, double beta) {
+        Ranker r = new Ranker(queryTerms, corpusSize);
+        r.beta = beta;
+        return r;
+    }
+
+    private double jelinekMercerScore(IndexDocument doc) {
+        return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
+            double tfd = doc.termFrequency(termPosting.term());
+            //Unsure if this is the term's frequency out of every document in corpus or not
+            double tfq = termPosting.getQueryTermFrequency();
+            double pt = tfq / corpusSize;
+            return ( Math.log(  ( beta * ( ( tfd ) / (doc.getNumTerms() - tfd ) ) ) + (1-beta) * pt ) );
+        })).getSum();
+    }
+
+    private static Ranker bimRanker(TreeSet<PostingsList> queryTerms, int corpusSize, double a, double b) {
+        Ranker r = new Ranker(queryTerms, corpusSize);
+        r.a = a;
+        r.b = b;
+        return r;
+    }
+
     private double bimScore(IndexDocument doc) {
         return queryPostings.stream().collect(Collectors.summarizingDouble((PostingsList termPosting) -> {
             
@@ -186,21 +189,6 @@ public class Ranker {
         //ct = Math.log((((pt * (1-ut) ) + 1) / ((ut * (1-pt)) + lapace) ));
         ct = Math.log((N - nt)/ nt);
         return ct;
-    }
-
-    private static boolean validateVariant(@NotNull String variant) {
-        /*
-        Should support:
-        1. lnc.ltn
-        2. bnn.bnn
-        3. anc.apc
-        */
-        return (variant.equals("lnc.ltn") || variant.equals("bnn.bnn") || variant.equals("anc.apc"));
-    }
-
-    private double tfidfScore(IndexDocument doc) {
-        double[] docVector = calculateDocumentVector(doc);
-        return dotProduct(docVector, queryVector);
     }
 
     private double termFrequencyScore(int TF, int maxTF, char variant) {

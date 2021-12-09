@@ -120,6 +120,8 @@ public class Index implements Serializable{
         }
     }
 
+    // @fixme database schema has changed.  This needs to be updated if we want to
+    // regenerate our index from nothing.
     private void resetDatabase() throws SQLException {
         try {
             PreparedStatement s = connection.prepareStatement("DROP TABLE DOCUMENTS");
@@ -245,23 +247,6 @@ public class Index implements Serializable{
         }, vocab, offset, max);
         commitTransaction();
         return numAdded;
-    }
-
-    /**
-     * Log a query result for later analysis
-     * @param queryID - the TREC id of the query
-     * @param documentID - TREC id of returned document
-     * @param score - score the document received
-     * @param ranking - the document's ranking in overall query results
-     */
-    public void logResult(@NotNull final String queryID, @NotNull final String documentID, final double score, final int ranking) {
-        final Optional<String> opt = getFulltextById(documentID);
-        if (opt.isPresent()) {
-            final String fulltext = opt.get();
-            System.err.printf("Query %s - picked %s (%f-%d) (%s)\n", queryID, documentID, score, ranking, fulltext);
-        } else {
-            System.err.printf("Query %s - picked nonexistant document %s (%f-%d)\n", queryID, documentID, score, ranking);
-        }
     }
 
     /**
@@ -578,6 +563,7 @@ public class Index implements Serializable{
         return Collections.emptyIterator();
     }
 
+    // @review
     /**
      * returns an iterator that iterates over all documents in the specified range.
      * Using minIdx and maxDocuments you can can iterate over the corpus in parts.  Perhaps 10000 at a time.
@@ -708,6 +694,7 @@ public class Index implements Serializable{
         return Collections.emptyIterator();
     }
 
+    // @review
     public Optional<Map<String, Integer>> getDocumentTermMap(@NotNull final String docId) {
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.GET_DOC_TERM_MAP));
@@ -759,6 +746,7 @@ public class Index implements Serializable{
         return false;
     }
 
+    // @review
     public boolean markDocumentRelevant(@NotNull final String docID) {
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.MARK_SCORED));
@@ -903,6 +891,7 @@ public class Index implements Serializable{
         return false;
     }
 
+    // @review
     public Optional<PostingsList> getPostingsList(@NotNull final String term, @NotNull final Map<String, IndexDocument> documents) {
         try {
             final PreparedStatement s = connection.prepareStatement(queryStrings.get(QUERY.SELECT_POSTINGS));
@@ -1019,5 +1008,21 @@ public class Index implements Serializable{
         });
         return termFrequencies;
     }
-}
 
+    /**
+     * Log a query result for later analysis
+     * @param queryID - the TREC id of the query
+     * @param documentID - TREC id of returned document
+     * @param score - score the document received
+     * @param ranking - the document's ranking in overall query results
+     */
+    public void logResult(@NotNull final String queryID, @NotNull final String documentID, final double score, final int ranking) {
+        final Optional<String> opt = getFulltextById(documentID);
+        if (opt.isPresent()) {
+            final String fulltext = opt.get();
+            System.err.printf("Query %s - picked %s (%f-%d) (%s)\n", queryID, documentID, score, ranking, fulltext);
+        } else {
+            System.err.printf("Query %s - picked nonexistant document %s (%f-%d)\n", queryID, documentID, score, ranking);
+        }
+    }
+}
