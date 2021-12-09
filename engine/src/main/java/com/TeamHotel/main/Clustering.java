@@ -2,12 +2,14 @@ package com.TeamHotel.main;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import com.TeamHotel.inverindex.Index;
 import org.apache.commons.lang3.RandomUtils;
@@ -34,7 +36,7 @@ public class Clustering {
         //for (int i = 0; i < numclusters;i++)
         //{
             //int randomNum = RandomUtils.nextInt(0, maxDocuments);
-            Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector = idx.getDocumentVectorByIndex(28395);
+            Optional<Pair<String, ArrayList<Double>>> randomDocIdAndVector = idx.getDocumentVectorByIndex(1218406);
             System.out.println("clusterId: " + randomDocIdAndVector.get());
             //idx.setDocumentClass(randomDocIdAndVector.get().getKey(), i);
             idx.addFakeLeader(1, randomDocIdAndVector.get().getValue());
@@ -67,7 +69,7 @@ public class Clustering {
      *            The list length should be at most <resultsPerQuery>
      *            The Pair<String, Double> should contain the Document ID, and the Document Score.
      */
-    public static List<Pair<String, Double>> query(Index idx, @NotNull final List<String> query, HashMap<String, ArrayList<Double>> wordVector, int resultsPerQuery,Integer numOfDoc) {
+    public static List<Pair<String, Double>> query(Index idx, @NotNull final List<String> query, HashMap<String, ArrayList<Double>> wordVector,Integer numOfDoc) {
         List<Pair<String, Double>> results = new LinkedList<>();
         final int numDimensions = 100;
         AtomicInteger counter = new AtomicInteger();
@@ -96,14 +98,14 @@ public class Clustering {
             results.add(Pair.of(currdocID, score));
         }
 
-    
+        //results.stream().sorted((l, r) -> -Double.compare(l.getRight(),r.getRight())).limit(resultsPerQuery).collect(Collectors.toList());
 
 
         
         // example
         //String docId = "rvqWRVAVWetbVWEqw"; // the trec id
-    
-        return results;
+        //Collections.sort(results, Comparator.comparing(p -> p.getRight()));
+        return results.stream().sorted((l, r) -> -Double.compare(l.getRight(),r.getRight())).collect(Collectors.toList());
     }
 
     public static Integer updateCluster (final Index idx, Integer numOfDoc)
@@ -178,6 +180,7 @@ public class Clustering {
             }
             centroid(center,numOfClust);
             idx.addFakeLeader(clusID, center);
+            
         }
         return 0;
     }
