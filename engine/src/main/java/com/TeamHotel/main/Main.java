@@ -205,17 +205,18 @@ public class Main {
                 }
                 break;
             }
-            case "cluster-cbor-query": {
+            case "wordSim-cbor-query": {
             
-                if (args.length == 7) {
+                if (args.length == 9) {
                 
                     final String dbname = args[1];
                     final String cborQueryFile = args[2];
-                    final String facetMergeType = args[3];
-                    final String wordVFile = args[4];
-                    final int maxDocuments = Integer.parseInt(args[5]);
-                    final String runfile = args[6];
-                    final int resultsPerQuery = 20;
+                    final String qrelFile = args[3];
+                    final String facetMergeType = args[4];
+                    final String wordVFile = args[5];
+                    final String filterScored = args[6];
+                    final int maxDocuments = Integer.parseInt(args[7]);
+                    final String runfileName = args[8];
                     // generate list of queries
                     // facetedQueries = Map<queryid, List<queryFacets>>
                     // queryFacet = List<queryTerms>
@@ -223,32 +224,54 @@ public class Main {
                     // Each query facet should be treated like a normal query.
                     // For each query id, we query each individual facet query, and merge the results.
                     Map<String, List<List<String>>> facetedQueries = Preprocess.preprocessFacetedQueries(cborQueryFile);
+                    final Map<String, Set<String>> qrelDocs = Preprocess.getScoredQrelDocs(qrelFile).get();
                     HashMap<String, ArrayList<Double>> wordVectors = new HashMap<String, ArrayList<Double>>();
                     Index idx = Index.load(dbname).get();
                     WordSimilarity.wordVectorfile(wordVFile,wordVectors);
                     //FileWriter outFile = new FileWriter(String.format("WordSimilarity+Clustering-Y3.run"));
-                    FileWriter outFile = new FileWriter(runfile);
+                    FileWriter runFile = new FileWriter(runfileName);
 
+                    Map<String, List<List<Pair<String, Double>>>> queryResults = new TreeMap<>();
                     facetedQueries.forEach((queryID, facets) -> {
-                        final List<List<Pair<String, Double>>> allFacetResults = new LinkedList<>();
+                        queryResults.put(queryID, new ArrayList<>(facets.size()));
                         facets.forEach((List<String> queryFacet) -> {
                             // List<DocID, Score>
-                            final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet,wordVectors, resultsPerQuery,maxDocuments);
-                            allFacetResults.add(facetResults);
+                            final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet,wordVectors,maxDocuments);
+                            queryResults.get(queryID).add(facetResults);
                         });
-                        final List<Pair<String, Double>> finalResult = Merge_Queries.mergeFacets(allFacetResults, facetMergeType, 20);
-
-                        AtomicInteger i = new AtomicInteger();
-                        finalResult.forEach(p -> {
-                            try {
-                                outFile.write(String.format("%s Q0 %s %d %f TeamHotel-%s\n", queryID, p.getLeft(), i.get(), p.getRight(), "WordSimilarity"));
-                            } catch (IOException ex) {
-                                ex.printStackTrace();
-                            }
-                            idx.logResult(queryID, p.getLeft(), p.getRight(), i.getAndIncrement());
-                        });
-
                     });
+                        //System.out.println(allFacetResults);
+                        //final List<Pair<String, Double>> finalResult = Merge_Queries.mergeFacets(allFacetResults, facetMergeType, 20);
+                        Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
+                        queryResults.forEach((qid, facets) -> {
+                            //System.err.printf("qid %s has %d facets\n", qid, facets.size());
+                            List<Pair<String, Double>> result;
+                            if (filterScored.toLowerCase().equals("filter")) {
+                                result = Merge_Queries.filterUnscored(Merge_Queries.mergeFacets(facets, facetMergeType, 1000), qrelDocs.getOrDefault(qid, new HashSet<String>()), 20);
+                            }
+                            else {
+                                result = Merge_Queries.mergeFacets(facets, facetMergeType, 20);
+                            }
+                            //System.err.printf("merging them together we get %d ranked documents\n", result.size());
+                            finalResults.put(qid, result);
+                        });
+
+                        AtomicInteger i = new AtomicInteger(1);
+                        finalResults.forEach((String qid, List<Pair<String, Double>> results) -> {
+                            i.set(1);
+                            results.forEach((Pair<String, Double> p) -> {
+                
+                                try {
+                                    runFile.write(String.format("%s Q0 %s %d %f TeamHotel-%s\n", qid, p.getLeft(), i.get(), p.getRight(), "WordSimilarity"));
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                }
+                                //$queryId Q0 $paragraphId $rank $score $teamName-$methodName
+                                idx.logResult(qid, p.getLeft(), p.getRight(), i.getAndIncrement());
+                            });
+                        
+                        });
+                        runFile.close();      
                 } else {
                     System.out.printf("Usage: %s cluster-cbor-query index-name cborQueryFile\n", progName);
                 }
