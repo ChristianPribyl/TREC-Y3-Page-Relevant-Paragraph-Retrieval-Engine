@@ -34,7 +34,7 @@ public class WordSimilarity {
         documentIterator.forEachRemaining(pair -> {
             final String docID = pair.getLeft();
             final Map<String, Integer> termFrequencies = pair.getRight();
-            System.out.printf("Calculating vector for document %s\n", docID);
+            //System.out.printf("Calculating vector for document %s\n", docID);
             ArrayList<Double> docVector = new ArrayList<>(Collections.nCopies(numDimensions, 0.0));
             AtomicInteger counter = new AtomicInteger();
             ArrayList<Double> wordVector = new ArrayList<>(Collections.nCopies(numDimensions, 0.0));
@@ -89,7 +89,7 @@ public class WordSimilarity {
     }
 
     public static int wordVectorfile(String filename,HashMap<String, ArrayList<Double>> map) {
-        System.out.println("Loading word vectors");
+        //System.out.println("Loading word vectors");
         try {
             File myObj = new File(filename);
             Scanner myReader = new Scanner(myObj);
@@ -108,7 +108,7 @@ public class WordSimilarity {
                 map.put(word, vector);
                 numLoaded++;
                 if (numLoaded % 20000 == 0) {
-                    System.out.printf("Loaded %d word vectors\n", numLoaded);
+                    //System.out.printf("Loaded %d word vectors\n", numLoaded);
                 }
             }
             myReader.close();
@@ -144,7 +144,7 @@ public class WordSimilarity {
     }
 
     public static int averVectors(ArrayList<Double> doc, ArrayList<Double> vector, int count) {
-        System.out.println(count);
+        //System.out.println(count);
         for (int i = 0; i < doc.size();i++){
             doc.set(i, vector.get(i) / count);
         }

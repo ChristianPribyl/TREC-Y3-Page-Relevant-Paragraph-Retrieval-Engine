@@ -69,7 +69,7 @@ public class Clustering {
      *            The list length should be at most <resultsPerQuery>
      *            The Pair<String, Double> should contain the Document ID, and the Document Score.
      */
-    public static List<Pair<String, Double>> query(Index idx, @NotNull final List<String> query, HashMap<String, ArrayList<Double>> wordVector,Integer numOfDoc) {
+    public static List<Pair<String, Double>> query(Index idx, @NotNull final List<String> query, HashMap<String, ArrayList<Double>> wordVector,Integer numOfDoc, Integer maxResults) {
         List<Pair<String, Double>> results = new LinkedList<>();
         final int numDimensions = 100;
         AtomicInteger counter = new AtomicInteger();
@@ -96,16 +96,20 @@ public class Clustering {
             double score = dotProduct(docvec,queryVector);
             //System.out.println(" " + currdocID + " " + score );
             results.add(Pair.of(currdocID, score));
+            if (results.size() > 300000)
+            {   System.out.println("Sort and reorder " + results.size());
+                results = results.stream().sorted((l, r) -> -Double.compare(l.getRight(),r.getRight())).limit(maxResults).collect(Collectors.toList());
+            }
         }
 
         //results.stream().sorted((l, r) -> -Double.compare(l.getRight(),r.getRight())).limit(resultsPerQuery).collect(Collectors.toList());
 
-
+    
         
         // example
         //String docId = "rvqWRVAVWetbVWEqw"; // the trec id
         //Collections.sort(results, Comparator.comparing(p -> p.getRight()));
-        return results.stream().sorted((l, r) -> -Double.compare(l.getRight(),r.getRight())).collect(Collectors.toList());
+        return results;
     }
 
     public static Integer updateCluster (final Index idx, Integer numOfDoc)

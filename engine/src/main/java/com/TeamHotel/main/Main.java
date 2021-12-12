@@ -236,10 +236,11 @@ public class Main {
                         queryResults.put(queryID, new ArrayList<>(facets.size()));
                         facets.forEach((List<String> queryFacet) -> {
                             // List<DocID, Score>
-                            final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet,wordVectors,maxDocuments);
+                            final List<Pair<String, Double>> facetResults = Clustering.query(idx, queryFacet,wordVectors,maxDocuments,1000);
                             queryResults.get(queryID).add(facetResults);
                         });
                     });
+                    System.out.println("ready to filter or not ");
                         //System.out.println(allFacetResults);
                         //final List<Pair<String, Double>> finalResult = Merge_Queries.mergeFacets(allFacetResults, facetMergeType, 20);
                         Map<String, List<Pair<String, Double>>> finalResults = new HashMap<>(queryResults.size() * 2);
@@ -267,7 +268,7 @@ public class Main {
                                     ex.printStackTrace();
                                 }
                                 //$queryId Q0 $paragraphId $rank $score $teamName-$methodName
-                                idx.logResult(qid, p.getLeft(), p.getRight(), i.getAndIncrement());
+                                //idx.logResult(qid, p.getLeft(), p.getRight(), i.getAndIncrement());
                             });
                         
                         });
