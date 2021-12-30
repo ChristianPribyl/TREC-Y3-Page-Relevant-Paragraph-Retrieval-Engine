@@ -1,0 +1,6 @@
+We do not own the trec_eval tool, the trec_car_tools provided by the TREMA lab, or any files originally provided by trec (ending in .cbor or .qrel), 
+or any other dependancies (See pom.xml).
+
+For the source code (all files ending in .java) unless otherwise specified:
+
+Copyright (C) 2021 - Christian Pribyl, Kevin Wu, Cameron Oeze
